@@ -13,6 +13,14 @@ class SEO_Provider extends Base_Ability_Provider {
 
     public function get_abilities(): array {
         return array(
+
+            'wpgpt/seo-analysis-get' => array(
+                'label' => __( 'SEO analysis get', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Lee el análisis SEO almacenado para un post, incluido score si está disponible.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => array( 'type' => 'object', 'properties' => array( 'post_id' => array( 'type' => 'integer' ) ), 'required' => array( 'post_id' ) ),
+                'execute_callback' => array( $this, 'seo_analysis_get' ),
+                'output_schema' => $this->object_schema(),
+            ),
             'wpgpt/seo-plugin-status' => array(
                 'label' => __( 'SEO plugin status', 'wpgpt-mcp-bridge' ),
                 'description' => __( 'Informa del estado de Rank Math y Yoast SEO.', 'wpgpt-mcp-bridge' ),
@@ -53,6 +61,7 @@ class SEO_Provider extends Base_Ability_Provider {
     }
 
     public function seo_plugin_status(): array { return $this->service()->plugin_status(); }
+    public function seo_analysis_get( array $input ) { return $this->service()->get_analysis( absint( $input['post_id'] ?? 0 ) ); }
     public function seo_meta_get( array $input ) { return $this->service()->get_post_meta( absint( $input['post_id'] ?? 0 ) ); }
     public function seo_meta_update( array $input ) { return $this->service()->update_post_meta( $input ); }
     public function seo_settings_get( array $input ) { return $this->service()->get_settings( sanitize_key( (string) ( $input['plugin'] ?? '' ) ), sanitize_key( (string) ( $input['option_name'] ?? '' ) ) ); }

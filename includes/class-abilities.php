@@ -18,6 +18,7 @@ require_once __DIR__ . '/support/class-ability-catalog.php';
 require_once __DIR__ . '/database/class-database-catalog.php';
 require_once __DIR__ . '/database/class-safe-query-builder.php';
 require_once __DIR__ . '/database/class-database-inspector-service.php';
+require_once __DIR__ . '/database/class-database-audit-service.php';
 
 require_once __DIR__ . '/content/class-content-write-service.php';
 require_once __DIR__ . '/publishing/class-publishing-service.php';
@@ -44,8 +45,10 @@ require_once __DIR__ . '/seo/class-seo-service.php';
 require_once __DIR__ . '/integrations/class-jetengine-service.php';
 require_once __DIR__ . '/filesystem/class-filesystem-service.php';
 require_once __DIR__ . '/media/class-media-service.php';
+require_once __DIR__ . '/media/class-media-audit-service.php';
 require_once __DIR__ . '/users/class-user-manager-service.php';
 require_once __DIR__ . '/settings/class-settings-service.php';
+require_once __DIR__ . '/settings/class-options-audit-service.php';
 require_once __DIR__ . '/navigation/class-navigation-service.php';
 require_once __DIR__ . '/inspection/class-code-inspection-service.php';
 

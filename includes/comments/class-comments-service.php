@@ -10,6 +10,75 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class Comments_Service {
+
+    public function discussion_audit( array $input ): array {
+        global $wpdb;
+
+        $limit         = min( 200, max( 1, absint( $input['limit'] ?? 100 ) ) );
+        $post_type     = sanitize_key( (string) ( $input['post_type'] ?? '' ) );
+        $post_status   = sanitize_key( (string) ( $input['post_status'] ?? 'publish' ) );
+        $override_only = ! empty( $input['override_only'] );
+        $comments_open = array_key_exists( 'comments_open', $input ) ? (bool) $input['comments_open'] : null;
+        $pings_open    = array_key_exists( 'pings_open', $input ) ? (bool) $input['pings_open'] : null;
+
+        $where = array( "post_type NOT IN ('attachment','revision','nav_menu_item')" );
+        $args  = array();
+        if ( '' !== $post_type ) {
+            $where[] = 'post_type = %s';
+            $args[]  = $post_type;
+        }
+        if ( '' !== $post_status && 'any' !== $post_status ) {
+            $where[] = 'post_status = %s';
+            $args[]  = $post_status;
+        }
+        if ( true === $comments_open ) {
+            $where[] = "comment_status = 'open'";
+        } elseif ( false === $comments_open ) {
+            $where[] = "comment_status = 'closed'";
+        }
+        if ( true === $pings_open ) {
+            $where[] = "ping_status = 'open'";
+        } elseif ( false === $pings_open ) {
+            $where[] = "ping_status = 'closed'";
+        }
+
+        $sql = "SELECT ID, post_type, post_status, post_title, comment_status, ping_status FROM {$wpdb->posts} WHERE " . implode( ' AND ', $where ) . ' ORDER BY ID DESC';
+        $sql .= $wpdb->prepare( ' LIMIT %d', $limit );
+        if ( ! empty( $args ) ) {
+            $args[] = $limit;
+            $sql    = $wpdb->prepare( $sql, $args );
+        }
+        $rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+        $default_comment = (string) get_option( 'default_comment_status', 'open' );
+        $default_ping    = (string) get_option( 'default_ping_status', 'open' );
+        $items           = array();
+        foreach ( $rows as $row ) {
+            $comment_override = (string) $row['comment_status'] !== $default_comment;
+            $ping_override    = (string) $row['ping_status'] !== $default_ping;
+            if ( $override_only && ! $comment_override && ! $ping_override ) {
+                continue;
+            }
+            $items[] = array(
+                'post_id'                  => (int) $row['ID'],
+                'post_type'                => (string) $row['post_type'],
+                'post_status'              => (string) $row['post_status'],
+                'post_title'               => (string) $row['post_title'],
+                'comment_status'           => (string) $row['comment_status'],
+                'ping_status'              => (string) $row['ping_status'],
+                'comment_status_override'  => $comment_override,
+                'ping_status_override'     => $ping_override,
+            );
+        }
+
+        return array(
+            'count'            => count( $items ),
+            'default_comment_status' => $default_comment,
+            'default_ping_status'    => $default_ping,
+            'items'            => array_values( $items ),
+        );
+    }
+
     public function query_comments( array $input ): array {
         $page     = max( 1, absint( $input['page'] ?? 1 ) );
         $per_page = min( 100, max( 1, absint( $input['per_page'] ?? 20 ) ) );

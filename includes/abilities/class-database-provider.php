@@ -3,6 +3,7 @@
 namespace WPGPT\MCPBridge;
 
 use WPGPT\MCPBridge\Database\Database_Inspector_Service;
+use WPGPT\MCPBridge\Database\Database_Audit_Service;
 use WP_Error;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -11,9 +12,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Database_Provider extends Base_Ability_Provider {
     private ?Database_Inspector_Service $service = null;
+    private ?Database_Audit_Service $audit_service = null;
 
     public function get_abilities(): array {
         return array(
+
+            'wpgpt/db-audit-orphan-postmeta' => array(
+                'label' => __( 'DB audit orphan postmeta', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Detecta metadatos de post cuyos post_id ya no existen.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->audit_limit_schema(),
+                'execute_callback' => array( $this, 'db_audit_orphan_postmeta' ),
+                'output_schema' => $this->object_schema(),
+            ),
+            'wpgpt/db-audit-orphan-usermeta' => array(
+                'label' => __( 'DB audit orphan usermeta', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Detecta metadatos de usuario cuyos user_id ya no existen.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->audit_limit_schema(),
+                'execute_callback' => array( $this, 'db_audit_orphan_usermeta' ),
+                'output_schema' => $this->object_schema(),
+            ),
+            'wpgpt/db-audit-orphan-term-relationships' => array(
+                'label' => __( 'DB audit orphan term relationships', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Detecta relaciones de taxonomía a objetos o taxonomías inexistentes.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->audit_limit_schema(),
+                'execute_callback' => array( $this, 'db_audit_orphan_term_relationships' ),
+                'output_schema' => $this->object_schema(),
+            ),
+            'wpgpt/db-audit-unused-terms' => array(
+                'label' => __( 'DB audit unused terms', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Lista términos sin uso efectivo (count 0), con filtro opcional por taxonomía.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->unused_terms_input_schema(),
+                'execute_callback' => array( $this, 'db_audit_unused_terms' ),
+                'output_schema' => $this->object_schema(),
+            ),
             'wpgpt/db-list-tables'    => array(
                 'label'            => __( 'DB list tables', 'wpgpt-mcp-bridge' ),
                 'description'      => __( 'Lista tablas seguras de la base de datos de WordPress.', 'wpgpt-mcp-bridge' ),
@@ -57,6 +88,14 @@ class Database_Provider extends Base_Ability_Provider {
             ),
         );
     }
+
+    public function db_audit_orphan_postmeta( array $input ): array { return $this->audit_service()->orphan_postmeta( $input ); }
+
+    public function db_audit_orphan_usermeta( array $input ): array { return $this->audit_service()->orphan_usermeta( $input ); }
+
+    public function db_audit_orphan_term_relationships( array $input ): array { return $this->audit_service()->orphan_term_relationships( $input ); }
+
+    public function db_audit_unused_terms( array $input ): array { return $this->audit_service()->unused_terms( $input ); }
 
     public function db_list_tables(): array {
         return $this->service()->list_tables();
@@ -102,12 +141,39 @@ class Database_Provider extends Base_Ability_Provider {
         return $this->service()->distinct( $table_key, $column, $where, $limit );
     }
 
+    private function audit_service(): Database_Audit_Service {
+        if ( null === $this->audit_service ) {
+            $this->audit_service = new Database_Audit_Service();
+        }
+
+        return $this->audit_service;
+    }
+
     private function service(): Database_Inspector_Service {
         if ( null === $this->service ) {
             $this->service = new Database_Inspector_Service();
         }
 
         return $this->service;
+    }
+
+    private function audit_limit_schema(): array {
+        return array(
+            'type'       => 'object',
+            'properties' => array(
+                'limit' => array( 'type' => 'integer' ),
+            ),
+        );
+    }
+
+    private function unused_terms_input_schema(): array {
+        return array(
+            'type'       => 'object',
+            'properties' => array(
+                'taxonomy' => array( 'type' => 'string' ),
+                'limit'    => array( 'type' => 'integer' ),
+            ),
+        );
     }
 
     private function table_input_schema(): array {

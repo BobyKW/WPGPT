@@ -3,6 +3,7 @@
 namespace WPGPT\MCPBridge;
 
 use WPGPT\MCPBridge\Settings\Settings_Service;
+use WPGPT\MCPBridge\Settings\Options_Audit_Service;
 use WP_Error;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -11,9 +12,35 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Settings_Provider extends Base_Ability_Provider {
     private ?Settings_Service $service = null;
+    private ?Options_Audit_Service $options_audit_service = null;
 
     public function get_abilities(): array {
         return array(
+
+            'wpgpt/options-query-safe' => array(
+                'label' => __( 'Options query safe', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Consulta opciones de WordPress con filtros seguros por nombre, autoload o contenido.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->options_query_schema(),
+                'execute_callback' => array( $this, 'options_query_safe' ),
+                'output_schema' => $this->object_schema(),
+                'permission_callback' => array( $this, 'can_manage_site' ),
+            ),
+            'wpgpt/options-autoload-audit' => array(
+                'label' => __( 'Options autoload audit', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Audita las opciones autoload más pesadas y agrupa huellas por prefijo.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->options_autoload_audit_schema(),
+                'execute_callback' => array( $this, 'options_autoload_audit' ),
+                'output_schema' => $this->object_schema(),
+                'permission_callback' => array( $this, 'can_manage_site' ),
+            ),
+            'wpgpt/transients-audit' => array(
+                'label' => __( 'Transients audit', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Lista transients con tamaño aproximado y estado de expiración.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->transients_audit_schema(),
+                'execute_callback' => array( $this, 'transients_audit' ),
+                'output_schema' => $this->object_schema(),
+                'permission_callback' => array( $this, 'can_manage_site' ),
+            ),
             'wpgpt/options-search-whitelisted' => array(
                 'label' => __( 'Options search whitelisted', 'wpgpt-mcp-bridge' ),
                 'description' => __( 'Busca opciones permitidas por whitelist.', 'wpgpt-mcp-bridge' ),
@@ -153,6 +180,9 @@ class Settings_Provider extends Base_Ability_Provider {
         );
     }
 
+    public function options_query_safe( array $input ): array { return $this->options_audit_service()->query_options( $input ); }
+    public function options_autoload_audit( array $input ): array { return $this->options_audit_service()->autoload_audit( $input ); }
+    public function transients_audit( array $input ): array { return $this->options_audit_service()->transients_audit( $input ); }
     public function options_search_whitelisted( array $input ): array { return $this->service()->search_whitelisted_options( $input ); }
     public function options_update_whitelisted( array $input ): array|WP_Error { return $this->service()->update_whitelisted_option( $input ); }
     public function theme_info( array $input ): array|WP_Error { return $this->service()->get_theme_info( $input ); }
@@ -173,6 +203,13 @@ class Settings_Provider extends Base_Ability_Provider {
     public function permalink_settings_update( array $input ): array|WP_Error { return $this->service()->update_permalink_settings( $input ); }
     public function homepage_set( array $input ): array|WP_Error { return $this->service()->set_homepage( $input ); }
 
+    private function options_audit_service(): Options_Audit_Service {
+        if ( null === $this->options_audit_service ) {
+            $this->options_audit_service = new Options_Audit_Service();
+        }
+        return $this->options_audit_service;
+    }
+
     private function service(): Settings_Service {
         if ( null === $this->service ) {
             $this->service = new Settings_Service();
@@ -180,6 +217,9 @@ class Settings_Provider extends Base_Ability_Provider {
         return $this->service;
     }
 
+    private function options_query_schema(): array { return array( 'type' => 'object', 'properties' => array( 'option_name_prefix' => array( 'type' => 'string' ), 'option_name_contains' => array( 'type' => 'string' ), 'option_value_contains' => array( 'type' => 'string' ), 'autoload' => array( 'type' => 'string' ), 'limit' => array( 'type' => 'integer' ) ) ); }
+    private function options_autoload_audit_schema(): array { return array( 'type' => 'object', 'properties' => array( 'limit' => array( 'type' => 'integer' ), 'group_by_prefix' => array( 'type' => 'boolean' ), 'prefix_length' => array( 'type' => 'integer' ) ) ); }
+    private function transients_audit_schema(): array { return array( 'type' => 'object', 'properties' => array( 'search' => array( 'type' => 'string' ), 'expired_only' => array( 'type' => 'boolean' ), 'limit' => array( 'type' => 'integer' ) ) ); }
     private function options_search_schema(): array { return array( 'type' => 'object', 'properties' => array( 'search' => array( 'type' => 'string' ), 'limit' => array( 'type' => 'integer' ) ) ); }
     private function options_update_schema(): array { return array( 'type' => 'object', 'properties' => array( 'option_name' => array( 'type' => 'string' ), 'option_value' => true ), 'required' => array( 'option_name' ) ); }
     private function theme_activate_schema(): array { return array( 'type' => 'object', 'properties' => array( 'stylesheet' => array( 'type' => 'string' ) ), 'required' => array( 'stylesheet' ) ); }

@@ -19,6 +19,41 @@ class SEO_Service {
         );
     }
 
+
+    public function get_analysis( int $post_id ): array|WP_Error {
+        if ( $post_id <= 0 || ! get_post( $post_id ) ) {
+            return new WP_Error( 'wpgpt_post_not_found', __( 'Debes indicar un post válido.', 'wpgpt-mcp-bridge' ), array( 'status' => 404 ) );
+        }
+
+        $plugin_status = $this->plugin_status();
+        $rank_math_score_raw = get_post_meta( $post_id, 'rank_math_seo_score', true );
+        $yoast_score_raw     = get_post_meta( $post_id, '_yoast_wpseo_linkdex', true );
+
+        $analysis = array(
+            'post_id'       => $post_id,
+            'plugin_status' => $plugin_status,
+            'rank_math'     => array(
+                'score'            => is_numeric( $rank_math_score_raw ) ? (int) $rank_math_score_raw : null,
+                'focus_keyword'    => get_post_meta( $post_id, 'rank_math_focus_keyword', true ),
+                'title'            => get_post_meta( $post_id, 'rank_math_title', true ),
+                'description'      => get_post_meta( $post_id, 'rank_math_description', true ),
+                'robots'           => get_post_meta( $post_id, 'rank_math_robots', true ),
+                'internal_links_processed' => get_post_meta( $post_id, 'rank_math_internal_links_processed', true ),
+                'available'        => '' !== (string) $rank_math_score_raw || '' !== (string) get_post_meta( $post_id, 'rank_math_focus_keyword', true ),
+            ),
+            'yoast'         => array(
+                'score'         => is_numeric( $yoast_score_raw ) ? (int) $yoast_score_raw : null,
+                'focus_keyword' => get_post_meta( $post_id, '_yoast_wpseo_focuskw', true ),
+                'title'         => get_post_meta( $post_id, '_yoast_wpseo_title', true ),
+                'description'   => get_post_meta( $post_id, '_yoast_wpseo_metadesc', true ),
+                'canonical'     => get_post_meta( $post_id, '_yoast_wpseo_canonical', true ),
+                'available'     => '' !== (string) $yoast_score_raw || '' !== (string) get_post_meta( $post_id, '_yoast_wpseo_focuskw', true ),
+            ),
+        );
+
+        return $analysis;
+    }
+
     public function get_post_meta( int $post_id ): array|WP_Error {
         if ( $post_id <= 0 || ! get_post( $post_id ) ) {
             return new WP_Error( 'wpgpt_post_not_found', __( 'Debes indicar un post válido.', 'wpgpt-mcp-bridge' ), array( 'status' => 404 ) );
