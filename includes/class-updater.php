@@ -43,16 +43,18 @@ class Updater {
         }
 
         return array(
-            'slug'        => dirname( plugin_basename( WPGPT_MCP_BRIDGE_FILE ) ),
-            'plugin'      => plugin_basename( WPGPT_MCP_BRIDGE_FILE ),
-            'new_version' => $latest_version,
-            'url'         => self::REPO_URL,
-            'package'     => $package_url,
-            'icons'       => array(),
-            'banners'     => array(),
-            'banners_rtl' => array(),
-            'tested'      => '',
-            'requires_php'=> '',
+            'id'            => self::REPO_URL,
+            'slug'          => dirname( plugin_basename( WPGPT_MCP_BRIDGE_FILE ) ),
+            'plugin'        => plugin_basename( WPGPT_MCP_BRIDGE_FILE ),
+            'version'       => $latest_version,
+            'new_version'   => $latest_version,
+            'url'           => self::REPO_URL,
+            'package'       => $package_url,
+            'icons'         => array(),
+            'banners'       => array(),
+            'banners_rtl'   => array(),
+            'tested'        => '',
+            'requires_php'  => '',
             'compatibility' => new \stdClass(),
         );
     }
