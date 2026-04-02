@@ -15,12 +15,13 @@ class JetEngine_Service {
         );
     }
 
-    public function options_scan( string $prefix = 'jet_engine', int $limit = 50 ): array {
+    public function options_scan( string $search = 'jet_engine', int $limit = 50 ): array {
         global $wpdb;
         $limit = max( 1, min( 100, $limit ) );
-        $like = '%' . $wpdb->esc_like( $prefix ) . '%';
+        $search = trim( $search );
+        $like = '%' . $wpdb->esc_like( $search ) . '%';
         $sql = $wpdb->prepare( "SELECT option_name, LEFT(option_value, 500) AS option_value_sample FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_name ASC LIMIT %d", $like, $limit );
         $rows = $wpdb->get_results( $sql, ARRAY_A );
-        return array( 'prefix' => $prefix, 'count' => count( $rows ), 'items' => array_values( $rows ) );
+        return array( 'search' => $search, 'count' => count( $rows ), 'items' => array_values( $rows ) );
     }
 }

@@ -38,7 +38,7 @@ class Content_Provider extends Base_Ability_Provider {
             ),
             'wpgpt/postmeta-search'    => array(
                 'label'            => __( 'Search postmeta', 'wpgpt-mcp-bridge' ),
-                'description'      => __( 'Busca claves de metadatos por prefijo y devuelve una muestra segura.', 'wpgpt-mcp-bridge' ),
+                'description'      => __( 'Busca claves de metadatos por coincidencia parcial y devuelve una muestra segura.', 'wpgpt-mcp-bridge' ),
                 'input_schema'     => $this->postmeta_input_schema(),
                 'execute_callback' => array( $this, 'search_postmeta' ),
                 'output_schema'    => $this->object_schema(),
@@ -104,7 +104,12 @@ class Content_Provider extends Base_Ability_Provider {
     public function search_postmeta( array $input ): array {
         global $wpdb;
 
-        $like  = isset( $input['meta_key_like'] ) ? sanitize_text_field( (string) $input['meta_key_like'] ) : '';
+        $like  = isset( $input['meta_key_contains'] )
+            ? sanitize_text_field( (string) $input['meta_key_contains'] )
+            : ( isset( $input['meta_key_like'] )
+                ? sanitize_text_field( (string) $input['meta_key_like'] )
+                : ( isset( $input['meta_key_prefix'] ) ? sanitize_text_field( (string) $input['meta_key_prefix'] ) : '' ) );
+        $like  = trim( $like );
         $limit = isset( $input['limit'] ) ? max( 1, min( 50, (int) $input['limit'] ) ) : 20;
 
         $sql = "SELECT post_id, meta_key, LEFT(meta_value, 300) AS meta_value_sample FROM {$wpdb->postmeta}";
@@ -114,7 +119,7 @@ class Content_Provider extends Base_Ability_Provider {
         $sql .= $wpdb->prepare( ' ORDER BY meta_id DESC LIMIT %d', $limit );
 
         $rows = $wpdb->get_results( $sql, ARRAY_A );
-        return array( 'count' => count( $rows ), 'items' => array_values( $rows ) );
+        return array( 'search' => $like, 'count' => count( $rows ), 'items' => array_values( $rows ) );
     }
 
     /**
@@ -159,8 +164,10 @@ class Content_Provider extends Base_Ability_Provider {
         return array(
             'type'       => 'object',
             'properties' => array(
-                'meta_key_like' => array( 'type' => 'string' ),
-                'limit'         => array( 'type' => 'integer' ),
+                'meta_key_contains' => array( 'type' => 'string' ),
+                'meta_key_like'     => array( 'type' => 'string' ),
+                'meta_key_prefix'   => array( 'type' => 'string' ),
+                'limit'             => array( 'type' => 'integer' ),
             ),
         );
     }

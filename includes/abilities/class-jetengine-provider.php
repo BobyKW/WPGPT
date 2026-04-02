@@ -21,8 +21,8 @@ class JetEngine_Provider extends Base_Ability_Provider {
             ),
             'wpgpt/jetengine-options-scan' => array(
                 'label' => __( 'JetEngine options scan', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Escanea opciones relacionadas con JetEngine por prefijo para ayudar a inspeccionar su configuración.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'prefix' => array( 'type' => 'string' ), 'limit' => array( 'type' => 'integer' ) ) ),
+                'description' => __( 'Escanea opciones relacionadas con JetEngine por coincidencia parcial para ayudar a inspeccionar su configuración.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => array( 'type' => 'object', 'properties' => array( 'search' => array( 'type' => 'string' ), 'prefix' => array( 'type' => 'string' ), 'limit' => array( 'type' => 'integer' ) ) ),
                 'execute_callback' => array( $this, 'jetengine_options_scan' ),
                 'output_schema' => $this->object_schema(),
             ),
@@ -30,7 +30,7 @@ class JetEngine_Provider extends Base_Ability_Provider {
     }
 
     public function jetengine_status(): array { return $this->service()->status(); }
-    public function jetengine_options_scan( array $input ): array { return $this->service()->options_scan( sanitize_key( (string) ( $input['prefix'] ?? 'jet_engine' ) ), (int) ( $input['limit'] ?? 50 ) ); }
+    public function jetengine_options_scan( array $input ): array { return $this->service()->options_scan( sanitize_key( (string) ( $input['search'] ?? ( $input['prefix'] ?? 'jet_engine' ) ) ), (int) ( $input['limit'] ?? 50 ) ); }
 
     private function service(): JetEngine_Service { if ( null === $this->service ) { $this->service = new JetEngine_Service(); } return $this->service; }
 }
