@@ -37,7 +37,16 @@ class Ability_Catalog {
             }
         }
 
+        self::log_declared_abilities( $abilities );
+
         return $abilities;
+    }
+
+    /**
+     * Log the number of declared abilities for debugging purposes.
+     */
+    private static function log_declared_abilities( array $abilities ): void {
+        error_log( sprintf( 'WPGPT MCP Bridge: %d abilities declared.', count( $abilities ) ) );
     }
 
     public static function declared_names(): array {
