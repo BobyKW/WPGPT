@@ -1,0 +1,15 @@
+<?php
+namespace WPGPT\MCPBridge;
+use WPGPT\MCPBridge\BlockEditor\Block_Editor_Service;
+if ( ! defined( 'ABSPATH' ) ) { exit; }
+class Block_Editor_Provider extends Base_Ability_Provider {
+    private ?Block_Editor_Service $service = null;
+    public function get_abilities(): array { return array(
+        'wpgpt/block-entity-query'=>array('label'=>__('Block entity query','wpgpt-mcp-bridge'),'description'=>__('Consulta entidades del editor de bloques.','wpgpt-mcp-bridge'),'input_schema'=>$this->query_schema(),'execute_callback'=>array($this,'entity_query'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
+        'wpgpt/block-entity-get'=>array('label'=>__('Block entity get','wpgpt-mcp-bridge'),'description'=>__('Obtiene una entidad del editor de bloques.','wpgpt-mcp-bridge'),'input_schema'=>array('type'=>'object','properties'=>array('entity_type'=>array('type'=>'string'),'id'=>array('type'=>'integer')),'required'=>array('entity_type','id')),'execute_callback'=>array($this,'entity_get'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
+        'wpgpt/block-entity-upsert'=>array('label'=>__('Block entity upsert','wpgpt-mcp-bridge'),'description'=>__('Crea o actualiza una entidad del editor de bloques.','wpgpt-mcp-bridge'),'input_schema'=>array('type'=>'object','properties'=>array('entity_type'=>array('type'=>'string'),'id'=>array('type'=>'integer'),'title'=>array('type'=>'string'),'slug'=>array('type'=>'string'),'status'=>array('type'=>'string'),'content'=>array('type'=>'string')),'required'=>array('entity_type','content')),'execute_callback'=>array($this,'entity_upsert'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
+        'wpgpt/block-entity-delete'=>array('label'=>__('Block entity delete','wpgpt-mcp-bridge'),'description'=>__('Elimina una entidad del editor de bloques.','wpgpt-mcp-bridge'),'input_schema'=>array('type'=>'object','properties'=>array('entity_type'=>array('type'=>'string'),'id'=>array('type'=>'integer'),'force'=>array('type'=>'boolean')),'required'=>array('entity_type','id')),'execute_callback'=>array($this,'entity_delete'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_delete_structure')),
+    ); }
+    public function entity_query(array $input){ return $this->service()->query_entities($input);} public function entity_get(array $input){ return $this->service()->get_entity($input);} public function entity_upsert(array $input){ return $this->service()->upsert_entity($input);} public function entity_delete(array $input){ return $this->service()->delete_entity($input);} private function service(): Block_Editor_Service { return $this->service ??= new Block_Editor_Service(); }
+    private function query_schema(): array { return array('type'=>'object','properties'=>array('entity_type'=>array('type'=>'string'),'search'=>array('type'=>'string'),'status'=>array('type'=>'string'),'theme'=>array('type'=>'string'),'page'=>array('type'=>'integer'),'per_page'=>array('type'=>'integer')),'required'=>array('entity_type')); }
+}
