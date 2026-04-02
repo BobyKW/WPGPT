@@ -131,7 +131,7 @@ class Admin {
         $app_password_data   = get_transient( self::TRANSIENT_APP_PASSWORD_DATA );
         $admin_error         = get_transient( 'wpgpt_mcp_bridge_admin_error' );
         $has_token           = Security::has_token();
-        $full_endpoint       = $has_token && is_string( $plain_token ) && '' !== $plain_token ? add_query_arg( 'wpgpt_token', rawurlencode( $plain_token ), $base_endpoint ) : $base_endpoint;
+        $full_endpoint       = $has_token && is_string( $plain_token ) && '' !== $plain_token ? add_query_arg( 'wpgpt_token', rawurlencode( $plain_token ), $adapter_server_url ) : $adapter_server_url;
         $abilities_endpoint  = rest_url( 'wp-abilities/v1/abilities' );
         $rest_index_endpoint = rest_url();
         $selected_user_id    = Security::get_user_id();
@@ -356,7 +356,7 @@ class Admin {
                         </form>
                     </div>
                     <div class="wpgpt-card-body">
-                        <p class="wpgpt-kv"><strong><?php echo esc_html__( 'Endpoint MCP', 'wpgpt-mcp-bridge' ); ?></strong><code><?php echo esc_html( $base_endpoint ); ?></code></p>
+                        <p class="wpgpt-kv"><strong><?php echo esc_html__( 'Endpoint MCP', 'wpgpt-mcp-bridge' ); ?></strong><code><?php echo esc_html( $adapter_server_url ); ?></code></p>
                         <p class="wpgpt-kv"><strong><?php echo esc_html__( 'URL completa con token', 'wpgpt-mcp-bridge' ); ?></strong>
                             <?php if ( $has_token && is_string( $plain_token ) && '' !== $plain_token ) : ?>
                                 <code><?php echo esc_html( $full_endpoint ); ?></code><br><span class="wpgpt-muted"><?php echo esc_html__( 'Guárdala ahora. El token en texto plano solo se muestra durante 10 minutos tras generarlo.', 'wpgpt-mcp-bridge' ); ?></span>
