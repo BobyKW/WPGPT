@@ -7,10 +7,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 class Database_Provider extends Base_Ability_Provider {
     private ?Database_Inspector_Service $service = null;
     private ?Database_Audit_Service $audit_service = null;
-
     private function service(): Database_Inspector_Service { return $this->service ??= new Database_Inspector_Service(); }
     private function audit_service(): Database_Audit_Service { return $this->audit_service ??= new Database_Audit_Service(); }
-
     public function get_abilities(): array {
         return array(
             'wpgpt/database-query' => array(
@@ -33,7 +31,6 @@ class Database_Provider extends Base_Ability_Provider {
             ),
         );
     }
-
     public function database_query(array $input): array {
         $items = array('tables'=>$this->service()->list_tables());
         if ( ! empty($input['include_audits']) ) {
@@ -46,7 +43,6 @@ class Database_Provider extends Base_Ability_Provider {
         }
         return array('summary'=>array('returned'=>count($items)),'items'=>$items,'warnings'=>array(),'next_actions'=>array());
     }
-
     private function run_action(string $action, array $input): array|WP_Error {
         return match($action) {
             'describe' => $this->service()->describe_table( sanitize_key((string)($input['table'] ?? '')) ),
@@ -61,14 +57,12 @@ class Database_Provider extends Base_Ability_Provider {
             default => new WP_Error('wpgpt_invalid_action', __( 'Acción no soportada.', 'wpgpt-mcp-bridge' ), array('status'=>400)),
         };
     }
-
     public function database_inspect(array $input): array|WP_Error {
         $action = sanitize_key((string)($input['action'] ?? ''));
         $result = $this->run_action($action,$input);
         if ( is_wp_error($result) ) { return $result; }
         return array('summary'=>array('action'=>$action,'inspected'=>1),'items'=>array($result),'warnings'=>array(),'next_actions'=>array());
     }
-
     public function database_apply(array $input): array|WP_Error {
         $action = sanitize_key((string)($input['action'] ?? ''));
         $dry = ! empty($input['dry_run']);

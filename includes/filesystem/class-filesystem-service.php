@@ -652,4 +652,141 @@ class Filesystem_Service {
             }
         }
     }
+
+    public function theme_catalog(): array {
+        $items = array();
+        foreach ( wp_get_themes() as $stylesheet => $theme ) {
+            $items[] = array(
+                'stylesheet' => $stylesheet,
+                'name'       => $theme->get( 'Name' ),
+                'version'    => $theme->get( 'Version' ),
+                'active'     => get_stylesheet() === $stylesheet,
+                'path'       => wp_normalize_path( $theme->get_stylesheet_directory() ),
+            );
+        }
+        usort( $items, static fn( $a, $b ) => strcasecmp( (string) $a['stylesheet'], (string) $b['stylesheet'] ) );
+        return array( 'count' => count( $items ), 'items' => $items );
+    }
+
+    public function inspect_backup( string $backup_id ): array|WP_Error {
+        $backup_id = preg_replace( '/[^a-zA-Z0-9_\-]/', '', $backup_id );
+        if ( '' === $backup_id ) {
+            return new WP_Error( 'wpgpt_fs_invalid_backup_id', __( 'Debes indicar un backup_id válido.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) );
+        }
+        $meta_path = $this->backup_root() . DIRECTORY_SEPARATOR . $backup_id . '.json';
+        if ( ! is_file( $meta_path ) ) {
+            return new WP_Error( 'wpgpt_fs_backup_not_found', __( 'No se ha encontrado el backup solicitado.', 'wpgpt-mcp-bridge' ), array( 'status' => 404 ) );
+        }
+        $meta = json_decode( (string) file_get_contents( $meta_path ), true );
+        if ( ! is_array( $meta ) ) {
+            return new WP_Error( 'wpgpt_fs_backup_invalid', __( 'El backup solicitado está dañado o incompleto.', 'wpgpt-mcp-bridge' ), array( 'status' => 500 ) );
+        }
+        return $meta;
+    }
+
+    public function query( array $input = array() ): array|WP_Error {
+        $scope = sanitize_key( (string) ( $input['scope'] ?? 'all' ) );
+        $limit = isset( $input['limit'] ) ? (int) $input['limit'] : 50;
+        $items = array();
+        $warnings = array();
+
+        if ( 'all' === $scope || 'plugins' === $scope ) {
+            $result = $this->plugin_list();
+            $items[] = array( 'scope' => 'plugins', 'item' => $result );
+        }
+        if ( 'all' === $scope || 'themes' === $scope ) {
+            $result = $this->theme_catalog();
+            $items[] = array( 'scope' => 'themes', 'item' => $result );
+        }
+        if ( 'plugin_tree' === $scope ) {
+            $result = $this->plugin_file_tree( sanitize_key( (string) ( $input['plugin_slug'] ?? '' ) ), isset( $input['max_depth'] ) ? (int) $input['max_depth'] : 4, $limit );
+            if ( is_wp_error( $result ) ) { return $result; }
+            $items[] = array( 'scope' => 'plugin_tree', 'item' => $result );
+        }
+        if ( 'theme_tree' === $scope ) {
+            $result = $this->theme_file_tree( sanitize_text_field( (string) ( $input['stylesheet'] ?? '' ) ), isset( $input['max_depth'] ) ? (int) $input['max_depth'] : 4, $limit );
+            if ( is_wp_error( $result ) ) { return $result; }
+            $items[] = array( 'scope' => 'theme_tree', 'item' => $result );
+        }
+        if ( 'search' === $scope ) {
+            $result = $this->search_files( (string) ( $input['query'] ?? '' ), 'plugins', isset( $input['extensions'] ) && is_array( $input['extensions'] ) ? $input['extensions'] : array(), $limit );
+            if ( is_wp_error( $result ) ) { return $result; }
+            $items[] = array( 'scope' => 'search', 'item' => $result );
+        }
+        if ( 'all' === $scope || 'backups' === $scope ) {
+            $result = $this->list_backups( $limit );
+            if ( is_wp_error( $result ) ) { return $result; }
+            $items[] = array( 'scope' => 'backups', 'item' => $result );
+        }
+
+        if ( empty( $items ) ) {
+            $warnings[] = __( 'No se han encontrado resultados para ese scope.', 'wpgpt-mcp-bridge' );
+        }
+
+        return array(
+            'summary' => array( 'scope' => $scope, 'returned' => count( $items ) ),
+            'items' => $items,
+            'warnings' => $warnings,
+            'next_actions' => array(),
+        );
+    }
+
+    public function inspect( array $input = array() ): array|WP_Error {
+        $mode = sanitize_key( (string) ( $input['mode'] ?? 'path' ) );
+        $result = match ( $mode ) {
+            'path' => $this->read_file( (string) ( $input['path'] ?? '' ), isset( $input['start_line'] ) ? (int) $input['start_line'] : 1, isset( $input['limit_lines'] ) ? (int) $input['limit_lines'] : 200 ),
+            'diff' => $this->diff_files( (string) ( $input['path_a'] ?? '' ), (string) ( $input['path_b'] ?? '' ) ),
+            'plugin_tree' => $this->plugin_file_tree( sanitize_key( (string) ( $input['plugin_slug'] ?? '' ) ), isset( $input['max_depth'] ) ? (int) $input['max_depth'] : 4, isset( $input['limit'] ) ? (int) $input['limit'] : 500 ),
+            'theme_tree' => $this->theme_file_tree( sanitize_text_field( (string) ( $input['stylesheet'] ?? '' ) ), isset( $input['max_depth'] ) ? (int) $input['max_depth'] : 4, isset( $input['limit'] ) ? (int) $input['limit'] : 500 ),
+            'backup' => $this->inspect_backup( (string) ( $input['backup_id'] ?? '' ) ),
+            default => new WP_Error( 'wpgpt_fs_mode_invalid', __( 'Modo de filesystem inspect no válido.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) ),
+        };
+        if ( is_wp_error( $result ) ) { return $result; }
+        return array(
+            'summary' => array( 'mode' => $mode, 'inspected' => 1 ),
+            'items' => array( $result ),
+            'warnings' => array(),
+            'next_actions' => array(
+                __( 'Usa wpgpt/filesystem-apply con dry_run=true antes de ejecutar cambios.', 'wpgpt-mcp-bridge' ),
+            ),
+        );
+    }
+
+    public function apply( array $input = array() ): array|WP_Error {
+        $action = sanitize_key( (string) ( $input['action'] ?? '' ) );
+        $dry_run = ! empty( $input['dry_run'] );
+        $payload = isset( $input['payload'] ) && is_array( $input['payload'] ) ? $input['payload'] : array();
+        if ( $dry_run ) {
+            return array(
+                'summary' => array( 'action' => $action, 'dry_run' => true ),
+                'items' => array(),
+                'warnings' => array(),
+                'blocked' => array(),
+                'next_actions' => array( __( 'Repite la misma llamada con dry_run=false para aplicar los cambios validados.', 'wpgpt-mcp-bridge' ) ),
+            );
+        }
+        $result = match ( $action ) {
+            'mkdir' => $this->make_directory( (string) ( $payload['path'] ?? '' ) ),
+            'copy' => $this->copy_path( (string) ( $payload['source'] ?? '' ), (string) ( $payload['destination'] ?? '' ), ! empty( $payload['overwrite'] ) ),
+            'move' => $this->move_path( (string) ( $payload['source'] ?? '' ), (string) ( $payload['destination'] ?? '' ), ! empty( $payload['overwrite'] ) ),
+            'rename' => $this->rename_path( (string) ( $payload['path'] ?? '' ), (string) ( $payload['new_name'] ?? '' ) ),
+            'delete' => $this->delete_path( (string) ( $payload['path'] ?? '' ) ),
+            'zip_create' => $this->zip_create( (string) ( $payload['source'] ?? '' ), (string) ( $payload['destination'] ?? '' ) ),
+            'zip_extract' => $this->zip_extract( (string) ( $payload['zip_path'] ?? '' ), (string) ( $payload['destination'] ?? '' ) ),
+            'write' => $this->write_file( (string) ( $payload['path'] ?? '' ), (string) ( $payload['content'] ?? '' ), ! array_key_exists( 'create_if_missing', $payload ) || ! empty( $payload['create_if_missing'] ) ),
+            'patch' => $this->patch_file( (string) ( $payload['path'] ?? '' ), (string) ( $payload['search'] ?? '' ), (string) ( $payload['replace'] ?? '' ), ! empty( $payload['replace_all'] ) ),
+            'backup_restore' => $this->restore_backup( (string) ( $payload['backup_id'] ?? '' ) ),
+            'backup_delete' => $this->delete_backup( (string) ( $payload['backup_id'] ?? '' ) ),
+            default => new WP_Error( 'wpgpt_fs_action_invalid', __( 'Acción de filesystem no válida.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) ),
+        };
+        if ( is_wp_error( $result ) ) { return $result; }
+        return array(
+            'summary' => array( 'action' => $action, 'dry_run' => false ),
+            'items' => array( $result ),
+            'warnings' => array(),
+            'blocked' => array(),
+            'next_actions' => array(),
+        );
+    }
+
 }

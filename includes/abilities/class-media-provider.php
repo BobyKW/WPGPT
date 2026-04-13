@@ -67,9 +67,9 @@ class Media_Provider extends Base_Ability_Provider {
         );
     }
 
-    public function media_audits_query( array $input ) { return $this->audit_service()->unused_list( $input ); }
-    public function media_audits_inspect( array $input ) { $scope = (string)($input['scope'] ?? 'usage'); if($scope === 'files') return $this->audit_service()->files_audit($input); return $this->audit_service()->usage_audit($input); }
-    public function media_audits_apply( array $input ) { $dry = ! empty($input['dry_run']); return array('summary'=>array('action'=>'audit','dry_run'=>$dry,'executed'=>0),'items'=>array(),'warnings'=>array(),'blocked'=>array(),'next_actions'=>array()); }
+    public function media_usage_audit( array $input ): array|WP_Error { return $this->audit_service()->usage_audit( $input ); }
+    public function media_unused_list( array $input ): array { return $this->audit_service()->unused_list( $input ); }
+    public function media_files_audit( array $input ): array { return $this->audit_service()->files_audit( $input ); }
     public function media_query( array $input = array() ): array|WP_Error { return $this->service()->query( $input ); }
     public function media_inspect( array $input = array() ): array|WP_Error { return $this->service()->inspect( $input ); }
     public function media_apply( array $input = array() ): array|WP_Error { return $this->service()->apply( $input ); }
@@ -89,9 +89,13 @@ class Media_Provider extends Base_Ability_Provider {
     }
 
     private function media_list_schema(): array { return array( 'type' => 'object', 'properties' => array( 'search' => array( 'type' => 'string' ), 'limit' => array( 'type' => 'integer' ) ) ); }
+    private function media_files_audit_schema(): array { return array( 'type' => 'object', 'properties' => array( 'limit' => array( 'type' => 'integer' ), 'max_scan' => array( 'type' => 'integer' ) ) ); }
+    private function media_get_schema(): array { return array( 'type' => 'object', 'properties' => array( 'attachment_id' => array( 'type' => 'integer' ) ), 'required' => array( 'attachment_id' ) ); }
+
     private function media_audits_inspect_schema(): array {
         return array('type'=>'object','additionalProperties'=>false,'properties'=>array('scope'=>array('type'=>'string','enum'=>array('usage','files')),'attachment_id'=>array('type'=>'integer'),'max_scan'=>array('type'=>'integer'),'limit'=>array('type'=>'integer')));
     }
+
     private function media_audits_apply_schema(): array {
         return array('type'=>'object','additionalProperties'=>false,'properties'=>array('action'=>array('type'=>'string','enum'=>array('audit')),'dry_run'=>array('type'=>'boolean')),'required'=>array('action'));
     }

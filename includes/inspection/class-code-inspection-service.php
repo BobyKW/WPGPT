@@ -90,4 +90,99 @@ class Code_Inspection_Service {
         $base = wp_normalize_path( ABSPATH );
         return 0 === strpos( $absolute, $base ) ? ltrim( substr( $absolute, strlen( $base ) ), '/' ) : $absolute;
     }
+
+    public function supported_types(): array {
+        return array( 'class', 'function', 'hook', 'shortcode', 'rest_route', 'constant' );
+    }
+
+    public function query( array $input = array() ): array|WP_Error {
+        $query = trim( (string) ( $input['query'] ?? '' ) );
+        $type  = sanitize_key( (string) ( $input['type'] ?? 'all' ) );
+        $scope = sanitize_text_field( (string) ( $input['scope'] ?? 'plugins' ) );
+        $limit = isset( $input['limit'] ) ? (int) $input['limit'] : 20;
+        if ( '' === $query ) {
+            return array(
+                'summary' => array( 'scope' => $scope, 'supported_types' => $this->supported_types() ),
+                'items' => array(),
+                'warnings' => array(),
+                'next_actions' => array( __( 'Indica query para buscar símbolos de código.', 'wpgpt-mcp-bridge' ) ),
+            );
+        }
+        $types = ( 'all' === $type || '' === $type ) ? $this->supported_types() : array( $type );
+        $items = array();
+        foreach ( $types as $one_type ) {
+            $result = $this->search_pattern( $one_type, $query, $scope, $limit );
+            if ( is_wp_error( $result ) ) { return $result; }
+            $items[] = array( 'type' => $one_type, 'item' => $result );
+        }
+        return array(
+            'summary' => array( 'query' => $query, 'scope' => $scope, 'types' => $types, 'returned' => count( $items ) ),
+            'items' => $items,
+            'warnings' => array(),
+            'next_actions' => array(),
+        );
+    }
+
+    public function inspect( array $input = array() ): array|WP_Error {
+        $query = trim( (string) ( $input['query'] ?? '' ) );
+        if ( '' === $query ) {
+            return new WP_Error( 'wpgpt_code_empty_query', __( 'Debes indicar query para inspeccionar código.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) );
+        }
+        $type = sanitize_key( (string) ( $input['type'] ?? 'all' ) );
+        $scope = sanitize_text_field( (string) ( $input['scope'] ?? 'plugins' ) );
+        $limit = isset( $input['limit'] ) ? (int) $input['limit'] : 10;
+        $include_context = ! empty( $input['include_context'] );
+        $context_lines = isset( $input['context_lines'] ) ? max( 1, min( 20, (int) $input['context_lines'] ) ) : 3;
+        $types = ( 'all' === $type || '' === $type ) ? $this->supported_types() : array( $type );
+        $items = array();
+        foreach ( $types as $one_type ) {
+            $result = $this->search_pattern( $one_type, $query, $scope, $limit );
+            if ( is_wp_error( $result ) ) { return $result; }
+            if ( $include_context ) {
+                foreach ( $result['items'] as &$match ) {
+                    $context = $this->fs->read_file( (string) $match['path'], max( 1, (int) $match['line_number'] - $context_lines ), ( $context_lines * 2 ) + 1 );
+                    if ( ! is_wp_error( $context ) ) {
+                        $match['context'] = array(
+                            'start_line' => $context['start_line'],
+                            'end_line' => $context['end_line'],
+                            'content' => $context['content'],
+                        );
+                    }
+                }
+                unset( $match );
+            }
+            $items[] = array( 'type' => $one_type, 'item' => $result );
+        }
+        return array(
+            'summary' => array( 'query' => $query, 'scope' => $scope, 'types' => $types, 'inspected' => count( $items ) ),
+            'items' => $items,
+            'warnings' => array(),
+            'next_actions' => array( __( 'Usa wpgpt/code-apply con dry_run=true para validar una búsqueda antes de repetirla operativamente.', 'wpgpt-mcp-bridge' ) ),
+        );
+    }
+
+    public function apply( array $input = array() ): array|WP_Error {
+        $action = sanitize_key( (string) ( $input['action'] ?? '' ) );
+        $dry_run = ! empty( $input['dry_run'] );
+        $payload = isset( $input['payload'] ) && is_array( $input['payload'] ) ? $input['payload'] : array();
+        if ( 'search' !== $action ) {
+            return new WP_Error( 'wpgpt_code_action_invalid', __( 'Acción de code no válida.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) );
+        }
+        if ( $dry_run ) {
+            return array(
+                'summary' => array( 'action' => $action, 'dry_run' => true ),
+                'items' => array(),
+                'warnings' => array(),
+                'blocked' => array(),
+                'next_actions' => array( __( 'Repite la misma llamada con dry_run=false para ejecutar la búsqueda validada.', 'wpgpt-mcp-bridge' ) ),
+            );
+        }
+        $result = $this->inspect( $payload );
+        if ( is_wp_error( $result ) ) { return $result; }
+        $result['summary']['action'] = $action;
+        $result['summary']['dry_run'] = false;
+        $result['blocked'] = array();
+        return $result;
+    }
+
 }
