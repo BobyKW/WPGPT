@@ -3,7 +3,6 @@
 namespace WPGPT\MCPBridge;
 
 use WPGPT\MCPBridge\Settings\Settings_Service;
-use WPGPT\MCPBridge\Settings\Options_Audit_Service;
 use WP_Error;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -12,220 +11,101 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Settings_Provider extends Base_Ability_Provider {
     private ?Settings_Service $service = null;
-    private ?Options_Audit_Service $options_audit_service = null;
 
     public function get_abilities(): array {
         return array(
-
-            'wpgpt/options-query-safe' => array(
-                'label' => __( 'Options query safe', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Consulta opciones de WordPress con filtros seguros por nombre, autoload o contenido.', 'wpgpt-mcp-bridge' ),
+            'wpgpt/options-query' => array(
+                'label' => __( 'Options query', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Lista, filtra y resume opciones y transients de WordPress de forma segura.', 'wpgpt-mcp-bridge' ),
                 'input_schema' => $this->options_query_schema(),
-                'execute_callback' => array( $this, 'options_query_safe' ),
+                'execute_callback' => array( $this, 'options_query' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_manage_site' ),
             ),
-            'wpgpt/options-autoload-audit' => array(
-                'label' => __( 'Options autoload audit', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Audita las opciones autoload más pesadas y agrupa huellas por prefijo.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->options_autoload_audit_schema(),
-                'execute_callback' => array( $this, 'options_autoload_audit' ),
+            'wpgpt/options-inspect' => array(
+                'label' => __( 'Options inspect', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Inspecciona una o varias opciones o auditorías de autoload/transients.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->options_inspect_schema(),
+                'execute_callback' => array( $this, 'options_inspect' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_manage_site' ),
             ),
-            'wpgpt/transients-audit' => array(
-                'label' => __( 'Transients audit', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lista transients con tamaño aproximado y estado de expiración.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->transients_audit_schema(),
-                'execute_callback' => array( $this, 'transients_audit' ),
+            'wpgpt/options-apply' => array(
+                'label' => __( 'Options apply', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Ejecuta cambios controlados sobre opciones o transients, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->options_apply_schema(),
+                'execute_callback' => array( $this, 'options_apply' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_manage_site' ),
             ),
-            'wpgpt/options-search-whitelisted' => array(
-                'label' => __( 'Options search whitelisted', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Busca opciones permitidas por whitelist.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->options_search_schema(),
-                'execute_callback' => array( $this, 'options_search_whitelisted' ),
+            'wpgpt/themes-query' => array(
+                'label' => __( 'Themes query', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Lista, filtra y resume temas instalados con prioridad a información local del sitio.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->themes_query_schema(),
+                'execute_callback' => array( $this, 'themes_query' ),
                 'output_schema' => $this->object_schema(),
             ),
-            'wpgpt/options-update-whitelisted' => array(
-                'label' => __( 'Options update whitelisted', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza una opción permitida por whitelist.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->options_update_schema(),
-                'execute_callback' => array( $this, 'options_update_whitelisted' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_manage_site' ),
-            ),
-            'wpgpt/theme-info' => array(
-                'label' => __( 'Theme info', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Obtiene información detallada de un tema.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->theme_activate_schema(),
-                'execute_callback' => array( $this, 'theme_info' ),
+            'wpgpt/themes-inspect' => array(
+                'label' => __( 'Themes inspect', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Inspecciona uno o varios temas instalados por stylesheet.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->themes_inspect_schema(),
+                'execute_callback' => array( $this, 'themes_inspect' ),
                 'output_schema' => $this->object_schema(),
             ),
-            'wpgpt/theme-list' => array(
-                'label' => __( 'Theme list', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lista temas instalados.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'theme_list' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/theme-delete' => array(
-                'label' => __( 'Theme delete', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Elimina un tema instalado.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->theme_activate_schema(),
-                'execute_callback' => array( $this, 'theme_delete' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_delete_structure' ),
-            ),
-            'wpgpt/theme-activate' => array(
-                'label' => __( 'Theme activate', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Activa un tema instalado por stylesheet.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->theme_activate_schema(),
-                'execute_callback' => array( $this, 'theme_activate' ),
+            'wpgpt/themes-apply' => array(
+                'label' => __( 'Themes apply', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Ejecuta acciones controladas sobre temas instalados, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->themes_apply_schema(),
+                'execute_callback' => array( $this, 'themes_apply' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_manage_site' ),
             ),
-            'wpgpt/general-settings-get' => array(
-                'label' => __( 'General settings get', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lee los ajustes generales principales del sitio.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'general_settings_get' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/general-settings-update' => array(
-                'label' => __( 'General settings update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza ajustes generales del sitio.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'blogname' => array( 'type' => 'string' ), 'blogdescription' => array( 'type' => 'string' ), 'admin_email' => array( 'type' => 'string' ), 'timezone_string' => array( 'type' => 'string' ), 'date_format' => array( 'type' => 'string' ), 'time_format' => array( 'type' => 'string' ), 'start_of_week' => array( 'type' => 'integer' ), 'site_icon' => array( 'type' => 'integer' ) ) ),
-                'execute_callback' => array( $this, 'general_settings_update' ),
+            'wpgpt/settings-query' => array(
+                'label' => __( 'Settings query', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Resume ajustes generales, lectura, escritura, discusión, permalinks y privacidad.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->settings_query_schema(),
+                'execute_callback' => array( $this, 'settings_query' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_manage_site' ),
             ),
-            'wpgpt/privacy-page-set' => array(
-                'label' => __( 'Privacy page set', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Define la página de política de privacidad.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'page_id' => array( 'type' => 'integer' ) ), 'required' => array( 'page_id' ) ),
-                'execute_callback' => array( $this, 'privacy_page_set' ),
+            'wpgpt/settings-inspect' => array(
+                'label' => __( 'Settings inspect', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Inspecciona un grupo concreto de ajustes del sitio.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->settings_inspect_schema(),
+                'execute_callback' => array( $this, 'settings_inspect' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_manage_site' ),
             ),
-            'wpgpt/privacy-page-get' => array(
-                'label' => __( 'Privacy page get', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lee la página de política de privacidad.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'privacy_page_get' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/discussion-settings-get' => array(
-                'label' => __( 'Discussion settings get', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lee los ajustes de comentarios y discusión.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'discussion_settings_get' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/discussion-settings-update' => array(
-                'label' => __( 'Discussion settings update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza ajustes de comentarios y discusión.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->discussion_update_schema(),
-                'execute_callback' => array( $this, 'discussion_settings_update' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_manage_site' ),
-            ),
-            'wpgpt/writing-settings-get' => array(
-                'label' => __( 'Writing settings get', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lee los ajustes de escritura.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'writing_settings_get' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/writing-settings-update' => array(
-                'label' => __( 'Writing settings update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza ajustes de escritura.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->writing_update_schema(),
-                'execute_callback' => array( $this, 'writing_settings_update' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_manage_site' ),
-            ),
-            'wpgpt/reading-settings-get' => array(
-                'label' => __( 'Reading settings get', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lee los ajustes principales de lectura.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'reading_settings_get' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/reading-settings-update' => array(
-                'label' => __( 'Reading settings update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza ajustes principales de lectura.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->reading_update_schema(),
-                'execute_callback' => array( $this, 'reading_settings_update' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_manage_site' ),
-            ),
-            'wpgpt/permalink-settings-get' => array(
-                'label' => __( 'Permalink settings get', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lee la estructura de enlaces permanentes.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'permalink_settings_get' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/permalink-settings-update' => array(
-                'label' => __( 'Permalink settings update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza la estructura de enlaces permanentes.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->permalink_update_schema(),
-                'execute_callback' => array( $this, 'permalink_settings_update' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_manage_site' ),
-            ),
-            'wpgpt/homepage-set' => array(
-                'label' => __( 'Homepage set', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Define la portada del sitio y, opcionalmente, la página de entradas.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->homepage_set_schema(),
-                'execute_callback' => array( $this, 'homepage_set' ),
+            'wpgpt/settings-apply' => array(
+                'label' => __( 'Settings apply', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Ejecuta cambios controlados sobre ajustes del sitio, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->settings_apply_schema(),
+                'execute_callback' => array( $this, 'settings_apply' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_manage_site' ),
             ),
         );
     }
 
-    public function options_query_safe( array $input ): array { return $this->options_audit_service()->query_options( $input ); }
-    public function options_autoload_audit( array $input ): array { return $this->options_audit_service()->autoload_audit( $input ); }
-    public function transients_audit( array $input ): array { return $this->options_audit_service()->transients_audit( $input ); }
-    public function options_search_whitelisted( array $input ): array { return $this->service()->search_whitelisted_options( $input ); }
-    public function options_update_whitelisted( array $input ): array|WP_Error { return $this->service()->update_whitelisted_option( $input ); }
-    public function theme_info( array $input ): array|WP_Error { return $this->service()->get_theme_info( $input ); }
-    public function theme_list(): array { return $this->service()->list_themes(); }
-    public function theme_delete( array $input ): array|WP_Error { return $this->service()->delete_theme( $input ); }
-    public function theme_activate( array $input ): array|WP_Error { return $this->service()->activate_theme( $input ); }
-    public function general_settings_get(): array { return $this->service()->get_general_settings(); }
-    public function general_settings_update( array $input ): array { return $this->service()->update_general_settings( $input ); }
-    public function privacy_page_set( array $input ): array|WP_Error { return $this->service()->set_privacy_page( $input ); }
-    public function privacy_page_get(): array { return $this->service()->get_privacy_page(); }
-    public function discussion_settings_get(): array { return $this->service()->get_discussion_settings(); }
-    public function discussion_settings_update( array $input ): array { return $this->service()->update_discussion_settings( $input ); }
-    public function writing_settings_get(): array { return $this->service()->get_writing_settings(); }
-    public function writing_settings_update( array $input ): array { return $this->service()->update_writing_settings( $input ); }
-    public function reading_settings_get(): array { return $this->service()->get_reading_settings(); }
-    public function reading_settings_update( array $input ): array { return $this->service()->update_reading_settings( $input ); }
-    public function permalink_settings_get(): array { return $this->service()->get_permalink_settings(); }
-    public function permalink_settings_update( array $input ): array|WP_Error { return $this->service()->update_permalink_settings( $input ); }
-    public function homepage_set( array $input ): array|WP_Error { return $this->service()->set_homepage( $input ); }
+    public function options_query( array $input = array() ): array|WP_Error { return $this->service()->query_options( $input ); }
+    public function options_inspect( array $input = array() ): array|WP_Error { return $this->service()->inspect_options( $input ); }
+    public function options_apply( array $input = array() ): array|WP_Error { return $this->service()->apply_options( $input ); }
+    public function themes_query( array $input = array() ): array|WP_Error { return $this->service()->query_themes( $input ); }
+    public function themes_inspect( array $input = array() ): array|WP_Error { return $this->service()->inspect_themes( $input ); }
+    public function themes_apply( array $input = array() ): array|WP_Error { return $this->service()->apply_themes( $input ); }
+    public function settings_query( array $input = array() ): array|WP_Error { return $this->service()->query_settings( $input ); }
+    public function settings_inspect( array $input = array() ): array|WP_Error { return $this->service()->inspect_settings( $input ); }
+    public function settings_apply( array $input = array() ): array|WP_Error { return $this->service()->apply_settings( $input ); }
 
-    private function options_audit_service(): Options_Audit_Service {
-        if ( null === $this->options_audit_service ) {
-            $this->options_audit_service = new Options_Audit_Service();
-        }
-        return $this->options_audit_service;
-    }
+    private function service(): Settings_Service { return $this->service ??= new Settings_Service(); }
 
-    private function service(): Settings_Service {
-        if ( null === $this->service ) {
-            $this->service = new Settings_Service();
-        }
-        return $this->service;
-    }
-
-    private function options_query_schema(): array { return array( 'type' => 'object', 'properties' => array( 'option_name_prefix' => array( 'type' => 'string' ), 'option_name_contains' => array( 'type' => 'string' ), 'option_value_contains' => array( 'type' => 'string' ), 'autoload' => array( 'type' => 'string' ), 'limit' => array( 'type' => 'integer' ) ) ); }
-    private function options_autoload_audit_schema(): array { return array( 'type' => 'object', 'properties' => array( 'limit' => array( 'type' => 'integer' ), 'group_by_prefix' => array( 'type' => 'boolean' ), 'prefix_length' => array( 'type' => 'integer' ) ) ); }
-    private function transients_audit_schema(): array { return array( 'type' => 'object', 'properties' => array( 'search' => array( 'type' => 'string' ), 'expired_only' => array( 'type' => 'boolean' ), 'limit' => array( 'type' => 'integer' ) ) ); }
-    private function options_search_schema(): array { return array( 'type' => 'object', 'properties' => array( 'search' => array( 'type' => 'string' ), 'limit' => array( 'type' => 'integer' ) ) ); }
-    private function options_update_schema(): array { return array( 'type' => 'object', 'properties' => array( 'option_name' => array( 'type' => 'string' ), 'option_value' => true ), 'required' => array( 'option_name' ) ); }
-    private function theme_activate_schema(): array { return array( 'type' => 'object', 'properties' => array( 'stylesheet' => array( 'type' => 'string' ) ), 'required' => array( 'stylesheet' ) ); }
-    private function discussion_update_schema(): array { return array( 'type' => 'object', 'properties' => array( 'default_ping_status' => array( 'type' => 'string' ), 'default_comment_status' => array( 'type' => 'string' ), 'comment_registration' => array( 'type' => 'boolean' ), 'close_comments_for_old_posts' => array( 'type' => 'boolean' ), 'close_comments_days_old' => array( 'type' => 'integer' ), 'thread_comments' => array( 'type' => 'boolean' ), 'thread_comments_depth' => array( 'type' => 'integer' ) ) ); }
-    private function writing_update_schema(): array { return array( 'type' => 'object', 'properties' => array( 'default_category' => array( 'type' => 'integer' ), 'default_post_format' => array( 'type' => 'string' ), 'use_smilies' => array( 'type' => 'boolean' ), 'default_link_category' => array( 'type' => 'integer' ) ) ); }
-    private function reading_update_schema(): array { return array( 'type' => 'object', 'properties' => array( 'show_on_front' => array( 'type' => 'string' ), 'page_on_front' => array( 'type' => 'integer' ), 'page_for_posts' => array( 'type' => 'integer' ), 'posts_per_page' => array( 'type' => 'integer' ) ) ); }
-    private function permalink_update_schema(): array { return array( 'type' => 'object', 'properties' => array( 'permalink_structure' => array( 'type' => 'string' ) ), 'required' => array( 'permalink_structure' ) ); }
-    private function homepage_set_schema(): array { return array( 'type' => 'object', 'properties' => array( 'page_on_front' => array( 'type' => 'integer' ), 'page_for_posts' => array( 'type' => 'integer' ) ), 'required' => array( 'page_on_front' ) ); }
+    private function options_query_schema(): array { return array( 'type'=>'object', 'additionalProperties'=>false, 'properties'=>array( 'scope'=>array('type'=>'string','enum'=>array('options','autoload_audit','transients')), 'search'=>array('type'=>'string'), 'filters'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('autoload'=>array('type'=>'string'),'name'=>array('type'=>'string'),'keys'=>array('type'=>'array','items'=>array('type'=>'string')))), 'limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>200), 'offset'=>array('type'=>'integer','minimum'=>0) ) ); }
+    private function options_inspect_schema(): array { return array( 'type'=>'object', 'additionalProperties'=>false, 'properties'=>array( 'scope'=>array('type'=>'string','enum'=>array('option','autoload_audit','transient')), 'option_name'=>array('type'=>'string'), 'option_names'=>array('type'=>'array','items'=>array('type'=>'string')), 'key'=>array('type'=>'string'), 'keys'=>array('type'=>'array','items'=>array('type'=>'string')), 'search'=>array('type'=>'string') ) ); }
+    private function options_apply_schema(): array { return array( 'type'=>'object', 'additionalProperties'=>false, 'properties'=>array( 'action'=>array('type'=>'string','enum'=>array('update_option','delete_transient','delete_expired_transients')), 'dry_run'=>array('type'=>'boolean'), 'targets'=>array('type'=>'array','items'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('option_name'=>array('type'=>'string'),'key'=>array('type'=>'string')))), 'payload'=>array('type'=>'object','additionalProperties'=>true,'properties'=>array('option_name'=>array('type'=>'string'),'option_value'=>array(),'keys'=>array('type'=>'array','items'=>array('type'=>'string')))) ), 'required'=>array('action') ); }
+    private function themes_query_schema(): array { return array( 'type'=>'object', 'additionalProperties'=>false, 'properties'=>array( 'search'=>array('type'=>'string'), 'filters'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('stylesheet'=>array('type'=>'string'),'template'=>array('type'=>'string'),'active'=>array('type'=>'boolean'),'update_available'=>array('type'=>'boolean'),'block_theme'=>array('type'=>'boolean'),'is_child_theme'=>array('type'=>'boolean'))), 'limit'=>array('type'=>'integer','minimum'=>1,'maximum'=>200), 'offset'=>array('type'=>'integer','minimum'=>0) ) ); }
+    private function themes_inspect_schema(): array { return array( 'type'=>'object', 'additionalProperties'=>false, 'properties'=>array( 'stylesheet'=>array('type'=>'string'), 'stylesheets'=>array('type'=>'array','items'=>array('type'=>'string')) ) ); }
+    private function themes_apply_schema(): array { return array( 'type'=>'object', 'additionalProperties'=>false, 'properties'=>array( 'action'=>array('type'=>'string','enum'=>array('activate','update','delete')), 'dry_run'=>array('type'=>'boolean'), 'targets'=>array('type'=>'array','items'=>array('object','additionalProperties'=>false,'properties'=>array('stylesheet'=>array('type'=>'string')))), 'filters'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('stylesheet'=>array('type'=>'string'),'active'=>array('type'=>'boolean'),'update_available'=>array('type'=>'boolean'))) ), 'required'=>array('action') ); }
+    private function settings_query_schema(): array { return array( 'type'=>'object', 'additionalProperties'=>false, 'properties'=>array( 'scope'=>array('type'=>'string','enum'=>array('all','general','discussion','writing','reading','permalinks','privacy')) ) ); }
+    private function settings_inspect_schema(): array { return $this->settings_query_schema(); }
+    private function settings_apply_schema(): array { return array( 'type'=>'object', 'additionalProperties'=>false, 'properties'=>array( 'action'=>array('type'=>'string','enum'=>array('update_general','set_privacy_page','update_discussion','update_writing','update_reading','update_permalinks','set_homepage')), 'dry_run'=>array('type'=>'boolean'), 'payload'=>array('type'=>'object','additionalProperties'=>true) ), 'required'=>array('action') ); }
 }

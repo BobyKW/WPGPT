@@ -14,98 +14,89 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Structure_Provider extends Base_Ability_Provider {
     public function get_abilities(): array {
         return array(
-            'wpgpt/cpt-list' => array(
-                'label' => __( 'CPT list', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lista tipos de contenido registrados y los gestionados por el plugin.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'cpt_list' ),
+            'wpgpt/structure-query' => array(
+                'label' => __( 'Structure query', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Lista y resume tipos de contenido, taxonomías y metaboxes.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => array('type'=>'object','additionalProperties'=>false,'properties'=>array('scope'=>array('type'=>'string','enum'=>array('all','cpt','taxonomy','metabox')),'managed_only'=>array('type'=>'boolean'))),
+                'execute_callback' => array( $this, 'structure_query' ),
                 'output_schema' => $this->object_schema(),
             ),
-            'wpgpt/cpt-create' => array(
-                'label' => __( 'CPT create', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Crea y persiste un Custom Post Type.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->cpt_schema(),
-                'execute_callback' => array( $this, 'cpt_create' ),
+            'wpgpt/structure-inspect' => array(
+                'label' => __( 'Structure inspect', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Inspecciona un CPT, taxonomía o metabox concreto.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => array('type'=>'object','additionalProperties'=>false,'properties'=>array('scope'=>array('type'=>'string','enum'=>array('cpt','taxonomy','metabox')),'slug'=>array('type'=>'string'),'key'=>array('type'=>'string')),'required'=>array('scope')),
+                'execute_callback' => array( $this, 'structure_inspect' ),
+                'output_schema' => $this->object_schema(),
+            ),
+            'wpgpt/structure-apply' => array(
+                'label' => __( 'Structure apply', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Ejecuta acciones controladas sobre CPTs, taxonomías y metaboxes, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => array('type'=>'object','additionalProperties'=>false,'properties'=>array('scope'=>array('type'=>'string','enum'=>array('cpt','taxonomy','metabox')),'action'=>array('type'=>'string','enum'=>array('create','delete')),'dry_run'=>array('type'=>'boolean'),'payload'=>array('type'=>'object','additionalProperties'=>true)),'required'=>array('scope','action')),
+                'execute_callback' => array( $this, 'structure_apply' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_write_structure' ),
-            ),
-            'wpgpt/cpt-delete' => array(
-                'label' => __( 'CPT delete', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Elimina un Custom Post Type gestionado por el plugin.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->slug_schema(),
-                'execute_callback' => array( $this, 'cpt_delete' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_delete_structure' ),
-            ),
-            'wpgpt/taxonomy-list' => array(
-                'label' => __( 'Taxonomy list', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lista taxonomías registradas y las gestionadas por el plugin.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'taxonomy_list' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/taxonomy-create' => array(
-                'label' => __( 'Taxonomy create', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Crea y persiste una taxonomía custom.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->taxonomy_schema(),
-                'execute_callback' => array( $this, 'taxonomy_create' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_structure' ),
-            ),
-            'wpgpt/taxonomy-delete' => array(
-                'label' => __( 'Taxonomy delete', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Elimina una taxonomía gestionada por el plugin.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->slug_schema(),
-                'execute_callback' => array( $this, 'taxonomy_delete' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_delete_structure' ),
-            ),
-            'wpgpt/metabox-list' => array(
-                'label' => __( 'Metabox list', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lista definiciones de metaboxes gestionadas por el plugin.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'metabox_list' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/metabox-create' => array(
-                'label' => __( 'Metabox create', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Crea y persiste un metabox simple con campos básicos.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->metabox_schema(),
-                'execute_callback' => array( $this, 'metabox_create' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_structure' ),
-            ),
-            'wpgpt/metabox-delete' => array(
-                'label' => __( 'Metabox delete', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Elimina un metabox gestionado por el plugin.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->metabox_delete_schema(),
-                'execute_callback' => array( $this, 'metabox_delete' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_delete_structure' ),
             ),
         );
     }
 
-    public function cpt_list(): array { return Post_Type_Manager::list(); }
-    public function cpt_create( array $input ): array|WP_Error { return Post_Type_Manager::create( $input ); }
-    public function cpt_delete( array $input ): array|WP_Error { return Post_Type_Manager::delete( $input ); }
-    public function taxonomy_list(): array { return Taxonomy_Manager::list(); }
-    public function taxonomy_create( array $input ): array|WP_Error { return Taxonomy_Manager::create( $input ); }
-    public function taxonomy_delete( array $input ): array|WP_Error { return Taxonomy_Manager::delete( $input ); }
-    public function metabox_list(): array { return Metabox_Manager::list(); }
-    public function metabox_create( array $input ): array|WP_Error { return Metabox_Manager::create( $input ); }
-    public function metabox_delete( array $input ): array|WP_Error { return Metabox_Manager::delete( $input ); }
+    public function structure_query( array $input ): array {
+        $scope = isset($input['scope']) ? sanitize_key((string)$input['scope']) : 'all';
+        $managed_only = ! empty($input['managed_only']);
+        $items = array();
+        if ( 'all' === $scope || 'cpt' === $scope ) {
+            $list = Post_Type_Manager::list();
+            $entries = isset($list['managed']) && $managed_only ? (array)$list['managed'] : array_merge((array)($list['managed'] ?? array()), (array)($list['registered'] ?? array()));
+            $items[] = array('scope'=>'cpt','items'=>array_values($entries));
+        }
+        if ( 'all' === $scope || 'taxonomy' === $scope ) {
+            $list = Taxonomy_Manager::list();
+            $entries = isset($list['managed']) && $managed_only ? (array)$list['managed'] : array_merge((array)($list['managed'] ?? array()), (array)($list['registered'] ?? array()));
+            $items[] = array('scope'=>'taxonomy','items'=>array_values($entries));
+        }
+        if ( 'all' === $scope || 'metabox' === $scope ) {
+            $list = Metabox_Manager::list();
+            $items[] = array('scope'=>'metabox','items'=>array_values((array)($list['items'] ?? $list)));
+        }
+        return array('summary'=>array('scope'=>$scope,'returned'=>count($items)),'items'=>$items,'warnings'=>array(),'next_actions'=>array());
+    }
 
-    private function cpt_schema(): array {
-        return array('type'=>'object','properties'=>array('slug'=>array('type'=>'string'),'label'=>array('type'=>'string'),'singular_label'=>array('type'=>'string'),'public'=>array('type'=>'boolean'),'show_in_rest'=>array('type'=>'boolean'),'hierarchical'=>array('type'=>'boolean'),'supports'=>array('type'=>'array','items'=>array('type'=>'string'))),'required'=>array('slug','label'));
+    public function structure_inspect( array $input ): array|WP_Error {
+        $scope = isset($input['scope']) ? sanitize_key((string)$input['scope']) : '';
+        $slug = isset($input['slug']) ? sanitize_key((string)$input['slug']) : '';
+        $key = isset($input['key']) ? sanitize_key((string)$input['key']) : '';
+        if ( 'cpt' === $scope ) {
+            $list = Post_Type_Manager::list();
+            foreach (array_merge((array)($list['managed'] ?? array()), (array)($list['registered'] ?? array())) as $item) { if (($item['slug'] ?? '') === $slug) return array('summary'=>array('scope'=>'cpt','inspected'=>1),'items'=>array(array_merge($item,array('available_actions'=>array('delete'),'risk_level'=>'medium'))),'warnings'=>array(),'next_actions'=>array(__( 'Usa wpgpt/structure-apply con dry_run=true antes de ejecutar cambios.', 'wpgpt-mcp-bridge' ))); }
+            return new WP_Error('wpgpt_structure_not_found',__('No se ha encontrado el CPT indicado.','wpgpt-mcp-bridge'),array('status'=>404));
+        }
+        if ( 'taxonomy' === $scope ) {
+            $list = Taxonomy_Manager::list();
+            foreach (array_merge((array)($list['managed'] ?? array()), (array)($list['registered'] ?? array())) as $item) { if (($item['slug'] ?? '') === $slug) return array('summary'=>array('scope'=>'taxonomy','inspected'=>1),'items'=>array(array_merge($item,array('available_actions'=>array('delete'),'risk_level'=>'medium'))),'warnings'=>array(),'next_actions'=>array(__( 'Usa wpgpt/structure-apply con dry_run=true antes de ejecutar cambios.', 'wpgpt-mcp-bridge' ))); }
+            return new WP_Error('wpgpt_structure_not_found',__('No se ha encontrado la taxonomía indicada.','wpgpt-mcp-bridge'),array('status'=>404));
+        }
+        if ( 'metabox' === $scope ) {
+            $list = Metabox_Manager::list();
+            foreach ((array)($list['items'] ?? $list) as $item) { $item_key = sanitize_key((string)($item['key'] ?? ($item['id'] ?? ''))); if ($item_key === $key) return array('summary'=>array('scope'=>'metabox','inspected'=>1),'items'=>array(array_merge($item,array('available_actions'=>array('delete'),'risk_level'=>'medium'))),'warnings'=>array(),'next_actions'=>array(__( 'Usa wpgpt/structure-apply con dry_run=true antes de ejecutar cambios.', 'wpgpt-mcp-bridge' ))); }
+            return new WP_Error('wpgpt_structure_not_found',__('No se ha encontrado el metabox indicado.','wpgpt-mcp-bridge'),array('status'=>404));
+        }
+        return new WP_Error('wpgpt_structure_scope_invalid',__('Debes indicar un scope válido.','wpgpt-mcp-bridge'),array('status'=>400));
     }
-    private function taxonomy_schema(): array {
-        return array('type'=>'object','properties'=>array('slug'=>array('type'=>'string'),'label'=>array('type'=>'string'),'singular_label'=>array('type'=>'string'),'public'=>array('type'=>'boolean'),'show_in_rest'=>array('type'=>'boolean'),'hierarchical'=>array('type'=>'boolean'),'object_type'=>array('type'=>'array','items'=>array('type'=>'string')),'post_types'=>array('type'=>'array','items'=>array('type'=>'string'))),'required'=>array('slug','label'));
-    }
-    private function metabox_schema(): array {
-        return array('type'=>'object','properties'=>array('key'=>array('type'=>'string'),'id'=>array('type'=>'string'),'title'=>array('type'=>'string'),'post_types'=>array('type'=>'array','items'=>array('type'=>'string')),'fields'=>array('type'=>'array','items'=>array('type'=>'object','additionalProperties'=>true))),'required'=>array('title','fields'));
-    }
-    private function slug_schema(): array {
-        return array('type'=>'object','properties'=>array('slug'=>array('type'=>'string')),'required'=>array('slug'));
-    }
-    private function metabox_delete_schema(): array {
-        return array('type'=>'object','properties'=>array('key'=>array('type'=>'string')),'required'=>array('key'));
+
+    public function structure_apply( array $input ): array|WP_Error {
+        $scope = isset($input['scope']) ? sanitize_key((string)$input['scope']) : '';
+        $action = isset($input['action']) ? sanitize_key((string)$input['action']) : '';
+        $dry_run = ! empty($input['dry_run']);
+        $payload = isset($input['payload']) && is_array($input['payload']) ? $input['payload'] : array();
+        if ( ! in_array($scope,array('cpt','taxonomy','metabox'),true) || ! in_array($action,array('create','delete'),true) ) {
+            return new WP_Error('wpgpt_structure_action_invalid',__('La combinación scope/action no es válida.','wpgpt-mcp-bridge'),array('status'=>400));
+        }
+        if ($dry_run) {
+            return array('summary'=>array('scope'=>$scope,'action'=>$action,'dry_run'=>true,'executed'=>0,'blocked'=>0),'items'=>array(array('status'=>'dry_run','scope'=>$scope,'action'=>$action)),'warnings'=>array(),'blocked'=>array(),'next_actions'=>array(__( 'Repite la misma llamada con dry_run=false para aplicar los cambios validados.', 'wpgpt-mcp-bridge' )));
+        }
+        if ('cpt' === $scope) { $result = 'create' === $action ? Post_Type_Manager::create($payload) : Post_Type_Manager::delete($payload); }
+        elseif ('taxonomy' === $scope) { $result = 'create' === $action ? Taxonomy_Manager::create($payload) : Taxonomy_Manager::delete($payload); }
+        else { $result = 'create' === $action ? Metabox_Manager::create($payload) : Metabox_Manager::delete($payload); }
+        if (is_wp_error($result)) { return $result; }
+        return array('summary'=>array('scope'=>$scope,'action'=>$action,'dry_run'=>false,'executed'=>1,'blocked'=>0),'items'=>array(array('status'=>'applied','scope'=>$scope,'action'=>$action,'result'=>$result)),'warnings'=>array(),'blocked'=>array(),'next_actions'=>array());
     }
 }

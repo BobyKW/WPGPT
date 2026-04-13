@@ -14,92 +14,41 @@ class Plugin_Management_Provider extends Base_Ability_Provider {
 
     public function get_abilities(): array {
         return array(
-            'wpgpt/plugin-list-installed' => array(
-                'label' => __( 'Plugin list installed', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lista plugins instalados.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'plugin_list_installed' ),
+            'wpgpt/plugins-query' => array(
+                'label' => __( 'Plugins query', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Lista, filtra y resume plugins instalados con prioridad a información local del sitio.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->plugins_query_schema(),
+                'execute_callback' => array( $this, 'plugins_query' ),
                 'output_schema' => $this->object_schema(),
             ),
-            'wpgpt/plugin-get' => array(
-                'label' => __( 'Plugin get', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Obtiene información de un plugin instalado.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->plugin_file_schema(),
-                'execute_callback' => array( $this, 'plugin_get' ),
+            'wpgpt/plugins-inspect' => array(
+                'label' => __( 'Plugins inspect', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Inspecciona uno o varios plugins instalados por plugin_file o slug.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->plugins_inspect_schema(),
+                'execute_callback' => array( $this, 'plugins_inspect' ),
                 'output_schema' => $this->object_schema(),
             ),
-            'wpgpt/plugin-update' => array(
-                'label' => __( 'Plugin update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza un plugin instalado.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->plugin_file_schema(),
-                'execute_callback' => array( $this, 'plugin_update' ),
+            'wpgpt/plugins-apply' => array(
+                'label' => __( 'Plugins apply', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Ejecuta acciones controladas sobre plugins instalados o a instalar, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->plugins_apply_schema(),
+                'execute_callback' => array( $this, 'plugins_apply' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_write_plugins' ),
-            ),
-            'wpgpt/plugin-install' => array(
-                'label' => __( 'Plugin install', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Instala un plugin del repositorio oficial por slug.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->slug_schema(),
-                'execute_callback' => array( $this, 'plugin_install' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_plugins' ),
-            ),
-            'wpgpt/plugin-activate' => array(
-                'label' => __( 'Plugin activate', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Activa un plugin instalado por plugin_file o slug.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->plugin_file_schema(),
-                'execute_callback' => array( $this, 'plugin_activate' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_plugins' ),
-            ),
-            'wpgpt/plugin-deactivate' => array(
-                'label' => __( 'Plugin deactivate', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Desactiva un plugin instalado por plugin_file o slug.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->plugin_file_schema(),
-                'execute_callback' => array( $this, 'plugin_deactivate' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_plugins' ),
-            ),
-            'wpgpt/plugin-delete' => array(
-                'label' => __( 'Plugin delete', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Elimina un plugin instalado. Debe estar desactivado.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->plugin_file_schema(),
-                'execute_callback' => array( $this, 'plugin_delete' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_delete_plugins' ),
             ),
         );
     }
 
-    public function plugin_list_installed(): array { return $this->service()->list_installed(); }
-
-    public function plugin_get( array $input ): array|WP_Error {
-        $plugin_file = isset( $input['plugin_file'] ) ? sanitize_text_field( (string) $input['plugin_file'] ) : '';
-        return $this->service()->get_plugin( $plugin_file );
+    public function plugins_query( array $input = array() ): array|WP_Error {
+        return $this->service()->query( is_array( $input ) ? $input : array() );
     }
 
-    public function plugin_update( array $input ): array|WP_Error {
-        $plugin_file = isset( $input['plugin_file'] ) ? sanitize_text_field( (string) $input['plugin_file'] ) : '';
-        return $this->service()->update( $plugin_file );
+    public function plugins_inspect( array $input = array() ): array|WP_Error {
+        return $this->service()->inspect( is_array( $input ) ? $input : array() );
     }
 
-    public function plugin_install( array $input ): array|WP_Error {
-        $slug = isset( $input['slug'] ) ? sanitize_key( (string) $input['slug'] ) : '';
-        return $this->service()->install( $slug );
-    }
-
-    public function plugin_activate( array $input ): array|WP_Error {
-        $plugin_file = isset( $input['plugin_file'] ) ? sanitize_text_field( (string) $input['plugin_file'] ) : '';
-        return $this->service()->activate( $plugin_file );
-    }
-
-    public function plugin_deactivate( array $input ): array|WP_Error {
-        $plugin_file = isset( $input['plugin_file'] ) ? sanitize_text_field( (string) $input['plugin_file'] ) : '';
-        return $this->service()->deactivate( $plugin_file );
-    }
-
-    public function plugin_delete( array $input ): array|WP_Error {
-        $plugin_file = isset( $input['plugin_file'] ) ? sanitize_text_field( (string) $input['plugin_file'] ) : '';
-        return $this->service()->delete( $plugin_file );
+    public function plugins_apply( array $input = array() ): array|WP_Error {
+        return $this->service()->apply( is_array( $input ) ? $input : array() );
     }
 
     private function service(): Plugin_Manager_Service {
@@ -109,11 +58,80 @@ class Plugin_Management_Provider extends Base_Ability_Provider {
         return $this->service;
     }
 
-    private function slug_schema(): array {
-        return array('type'=>'object','properties'=>array('slug'=>array('type'=>'string')),'required'=>array('slug'));
+    private function plugins_query_schema(): array {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'properties'           => array(
+                'search'  => array( 'type' => 'string' ),
+                'filters' => array(
+                    'type'                 => 'object',
+                    'additionalProperties' => false,
+                    'properties'           => array(
+                        'plugin_file'         => array( 'type' => 'string' ),
+                        'slug'                => array( 'type' => 'string' ),
+                        'active'              => array( 'type' => 'boolean' ),
+                        'update_available'    => array( 'type' => 'boolean' ),
+                        'auto_update_enabled' => array( 'type' => 'boolean' ),
+                        'source'              => array( 'type' => 'string' ),
+                    ),
+                ),
+                'limit'   => array( 'type' => 'integer', 'minimum' => 1, 'maximum' => 200 ),
+                'offset'  => array( 'type' => 'integer', 'minimum' => 0 ),
+            ),
+        );
     }
 
-    private function plugin_file_schema(): array {
-        return array('type'=>'object','properties'=>array('plugin_file'=>array('type'=>'string')),'required'=>array('plugin_file'));
+    private function plugins_inspect_schema(): array {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'properties'           => array(
+                'plugin_file'   => array( 'type' => 'string' ),
+                'slug'          => array( 'type' => 'string' ),
+                'plugin_files'  => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+                'slugs'         => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+                'include_repo'  => array( 'type' => 'boolean' ),
+            ),
+        );
+    }
+
+    private function plugins_apply_schema(): array {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'properties'           => array(
+                'action'   => array(
+                    'type' => 'string',
+                    'enum' => array( 'install', 'update', 'activate', 'deactivate', 'delete' ),
+                ),
+                'dry_run'  => array( 'type' => 'boolean' ),
+                'targets'  => array(
+                    'type'  => 'array',
+                    'items' => array(
+                        'type'                 => 'object',
+                        'additionalProperties' => false,
+                        'properties'           => array(
+                            'plugin_file' => array( 'type' => 'string' ),
+                            'slug'        => array( 'type' => 'string' ),
+                        ),
+                    ),
+                ),
+                'filters'  => array(
+                    'type'                 => 'object',
+                    'additionalProperties' => false,
+                    'properties'           => array(
+                        'plugin_file'         => array( 'type' => 'string' ),
+                        'slug'                => array( 'type' => 'string' ),
+                        'active'              => array( 'type' => 'boolean' ),
+                        'update_available'    => array( 'type' => 'boolean' ),
+                        'auto_update_enabled' => array( 'type' => 'boolean' ),
+                        'source'              => array( 'type' => 'string' ),
+                        'search'              => array( 'type' => 'string' ),
+                    ),
+                ),
+            ),
+            'required'             => array( 'action' ),
+        );
     }
 }

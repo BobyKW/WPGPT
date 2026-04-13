@@ -1,16 +1,36 @@
 <?php
 namespace WPGPT\MCPBridge;
 use WPGPT\MCPBridge\WooCommerce\WooCommerce_Service;
+use WP_Error;
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 class WooCommerce_Provider extends Base_Ability_Provider {
     private ?WooCommerce_Service $service = null;
     public function get_abilities(): array { return array(
-        'wpgpt/wc-resource-query'=>array('label'=>__('WC resource query','wpgpt-mcp-bridge'),'description'=>__('Consulta recursos WooCommerce.','wpgpt-mcp-bridge'),'input_schema'=>$this->query_schema(),'execute_callback'=>array($this,'resource_query'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
-        'wpgpt/wc-resource-get'=>array('label'=>__('WC resource get','wpgpt-mcp-bridge'),'description'=>__('Obtiene un recurso WooCommerce.','wpgpt-mcp-bridge'),'input_schema'=>array('type'=>'object','properties'=>array('resource'=>array('type'=>'string'),'id'=>array('type'=>'integer')),'required'=>array('resource','id')),'execute_callback'=>array($this,'resource_get'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
-        'wpgpt/wc-resource-upsert'=>array('label'=>__('WC resource upsert','wpgpt-mcp-bridge'),'description'=>__('Crea o actualiza un recurso WooCommerce.','wpgpt-mcp-bridge'),'input_schema'=>array('type'=>'object','properties'=>array('resource'=>array('type'=>'string'),'id'=>array('type'=>'integer'),'data'=>array('type'=>'object','additionalProperties'=>true)),'required'=>array('resource','data')),'execute_callback'=>array($this,'resource_upsert'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
-        'wpgpt/wc-order-action'=>array('label'=>__('WC order action','wpgpt-mcp-bridge'),'description'=>__('Aplica una acción a un pedido WooCommerce.','wpgpt-mcp-bridge'),'input_schema'=>array('type'=>'object','properties'=>array('order_id'=>array('type'=>'integer'),'action'=>array('type'=>'string'),'params'=>array('type'=>'object','additionalProperties'=>true)),'required'=>array('order_id','action')),'execute_callback'=>array($this,'order_action'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
-        'wpgpt/wc-report-summary'=>array('label'=>__('WC report summary','wpgpt-mcp-bridge'),'description'=>__('Genera un resumen de WooCommerce.','wpgpt-mcp-bridge'),'input_schema'=>array('type'=>'object','properties'=>array('report'=>array('type'=>'string'),'date_from'=>array('type'=>'string'),'date_to'=>array('type'=>'string'),'limit'=>array('type'=>'integer')),'required'=>array('report')),'execute_callback'=>array($this,'report_summary'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
+        'wpgpt/wc-query'=>array('label'=>__('WC query','wpgpt-mcp-bridge'),'description'=>__('Lista y resume recursos o informes WooCommerce.','wpgpt-mcp-bridge'),'input_schema'=>$this->wc_query_schema(),'execute_callback'=>array($this,'wc_query'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
+        'wpgpt/wc-inspect'=>array('label'=>__('WC inspect','wpgpt-mcp-bridge'),'description'=>__('Inspecciona un recurso WooCommerce concreto.','wpgpt-mcp-bridge'),'input_schema'=>$this->wc_inspect_schema(),'execute_callback'=>array($this,'wc_inspect'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
+        'wpgpt/wc-apply'=>array('label'=>__('WC apply','wpgpt-mcp-bridge'),'description'=>__('Ejecuta acciones controladas sobre WooCommerce, con soporte dry_run.','wpgpt-mcp-bridge'),'input_schema'=>$this->wc_apply_schema(),'execute_callback'=>array($this,'wc_apply'),'output_schema'=>$this->object_schema(),'permission_callback'=>array($this,'can_manage_site')),
     ); }
-    public function resource_query(array $input){ return $this->service()->resource_query($input);} public function resource_get(array $input){ return $this->service()->resource_get($input);} public function resource_upsert(array $input){ return $this->service()->resource_upsert($input);} public function order_action(array $input){ return $this->service()->order_action($input);} public function report_summary(array $input){ return $this->service()->report_summary($input);} private function service(): WooCommerce_Service { return $this->service ??= new WooCommerce_Service(); }
-    private function query_schema(): array { return array('type'=>'object','properties'=>array('resource'=>array('type'=>'string'),'filters'=>array('type'=>'object','additionalProperties'=>true),'search'=>array('type'=>'string'),'page'=>array('type'=>'integer'),'per_page'=>array('type'=>'integer'),'orderby'=>array('type'=>'string'),'order'=>array('type'=>'string')),'required'=>array('resource')); }
+    public function wc_query(array $input){
+        if ( ! empty( $input['report'] ) ) { return $this->service()->report_summary($input); }
+        return $this->service()->resource_query($input);
+    }
+    public function wc_inspect(array $input){ return $this->service()->resource_get($input); }
+    public function wc_apply(array $input){
+        $action = isset($input['action']) ? sanitize_key((string)$input['action']) : '';
+        $dry_run = ! empty($input['dry_run']);
+        if ($dry_run) {
+            return array(
+                'summary'=>array('action'=>$action,'dry_run'=>true,'executed'=>0),
+                'items'=>array(array('status'=>'dry_run','action'=>$action,'message'=>__('Acción validada, no ejecutada por dry_run.','wpgpt-mcp-bridge'))),
+                'warnings'=>array(),'blocked'=>array(),'next_actions'=>array(),
+            );
+        }
+        if ('order_action' === $action) { return $this->service()->order_action($input); }
+        if ('upsert' === $action) { return $this->service()->resource_upsert($input); }
+        return new WP_Error('wpgpt_invalid_action', __('Acción WooCommerce no soportada.','wpgpt-mcp-bridge'), array('status'=>400));
+    }
+    private function service(): WooCommerce_Service { return $this->service ??= new WooCommerce_Service(); }
+    private function wc_query_schema(): array { return array('type'=>'object','additionalProperties'=>false,'properties'=>array('resource'=>array('type'=>'string'),'filters'=>array('type'=>'object','additionalProperties'=>true),'search'=>array('type'=>'string'),'page'=>array('type'=>'integer'),'per_page'=>array('type'=>'integer'),'orderby'=>array('type'=>'string'),'order'=>array('type'=>'string'),'report'=>array('type'=>'string'),'date_from'=>array('type'=>'string'),'date_to'=>array('type'=>'string'),'limit'=>array('type'=>'integer'))); }
+    private function wc_inspect_schema(): array { return array('type'=>'object','additionalProperties'=>false,'properties'=>array('resource'=>array('type'=>'string'),'id'=>array('type'=>'integer')),'required'=>array('resource','id')); }
+    private function wc_apply_schema(): array { return array('type'=>'object','additionalProperties'=>false,'properties'=>array('action'=>array('type'=>'string','enum'=>array('upsert','order_action')),'dry_run'=>array('type'=>'boolean'),'resource'=>array('type'=>'string'),'id'=>array('type'=>'integer'),'data'=>array('type'=>'object','additionalProperties'=>true),'order_id'=>array('type'=>'integer'),'params'=>array('type'=>'object','additionalProperties'=>true)),'required'=>array('action')); }
 }

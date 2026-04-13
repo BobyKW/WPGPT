@@ -12,31 +12,122 @@ if ( ! defined( 'ABSPATH' ) ) {
 class System_Provider extends Base_Ability_Provider {
     public function get_abilities(): array {
         return array(
-            'wpgpt/self-test'          => array(
-                'label'            => __( 'Self test', 'wpgpt-mcp-bridge' ),
-                'description'      => __( 'Confirma que el bridge está vivo y devuelve abilities registradas.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'self_test' ),
+            'wpgpt/system-query'   => array(
+                'label'            => __( 'System query', 'wpgpt-mcp-bridge' ),
+                'description'      => __( 'Resume el estado del bridge, del sitio y del catálogo de abilities.', 'wpgpt-mcp-bridge' ),
+                'input_schema'     => $this->system_query_input_schema(),
+                'execute_callback' => array( $this, 'system_query' ),
                 'output_schema'    => $this->object_schema(),
             ),
-            'wpgpt/site-info'          => array(
-                'label'            => __( 'Site info', 'wpgpt-mcp-bridge' ),
-                'description'      => __( 'Devuelve información básica del sitio, tema activo y versiones.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'get_site_info' ),
+            'wpgpt/system-inspect' => array(
+                'label'            => __( 'System inspect', 'wpgpt-mcp-bridge' ),
+                'description'      => __( 'Inspecciona el bridge, el sitio, el catálogo o una ability concreta.', 'wpgpt-mcp-bridge' ),
+                'input_schema'     => $this->system_inspect_input_schema(),
+                'execute_callback' => array( $this, 'system_inspect' ),
                 'output_schema'    => $this->object_schema(),
             ),
-            'wpgpt/discover-abilities' => array(
-                'label'            => __( 'Discover abilities', 'wpgpt-mcp-bridge' ),
-                'description'      => __( 'Lista abilities registradas accesibles para el usuario actual.', 'wpgpt-mcp-bridge' ),
-                'execute_callback' => array( $this, 'discover_abilities' ),
+            'wpgpt/system-apply'   => array(
+                'label'            => __( 'System apply', 'wpgpt-mcp-bridge' ),
+                'description'      => __( 'Ejecuta acciones seguras del sistema, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema'     => $this->system_apply_input_schema(),
+                'execute_callback' => array( $this, 'system_apply' ),
                 'output_schema'    => $this->object_schema(),
             ),
-            'wpgpt/ability-info'       => array(
-                'label'            => __( 'Ability info', 'wpgpt-mcp-bridge' ),
-                'description'      => __( 'Devuelve metadatos básicos de una ability por nombre.', 'wpgpt-mcp-bridge' ),
-                'input_schema'     => $this->ability_info_input_schema(),
-                'execute_callback' => array( $this, 'ability_info' ),
-                'output_schema'    => $this->object_schema(),
+        );
+    }
+
+
+    public function system_query( array $input = array() ): array {
+        $site = $this->get_site_info();
+        $self = $this->self_test();
+        $abilities = $this->discover_abilities();
+
+        return array(
+            'summary' => array(
+                'site_name' => $site['site_name'] ?? '',
+                'site_url' => $site['site_url'] ?? '',
+                'wordpress' => $site['wordpress'] ?? '',
+                'php' => $site['php'] ?? '',
+                'theme' => $site['theme']['name'] ?? '',
+                'bridge_version' => $self['plugin_version'] ?? '',
+                'read_only' => $self['read_only'] ?? false,
+                'abilities_visible' => $abilities['count'] ?? 0,
             ),
+            'items' => array(
+                array( 'scope' => 'site', 'data' => $site ),
+                array( 'scope' => 'bridge', 'data' => $self ),
+            ),
+            'warnings' => array(),
+            'next_actions' => array( __( 'Usa wpgpt/system-inspect para profundizar en abilities o en el bridge.', 'wpgpt-mcp-bridge' ) ),
+        );
+    }
+
+    public function system_inspect( array $input = array() ): array|WP_Error {
+        $scope = isset( $input['scope'] ) ? sanitize_key( (string) $input['scope'] ) : 'bridge';
+        if ( 'site' === $scope ) {
+            return array( 'scope' => 'site', 'item' => $this->get_site_info() );
+        }
+        if ( 'abilities' === $scope ) {
+            return array( 'scope' => 'abilities', 'item' => $this->discover_abilities() );
+        }
+        if ( 'ability' === $scope ) {
+            return array( 'scope' => 'ability', 'item' => $this->ability_info( $input ) );
+        }
+        return array( 'scope' => 'bridge', 'item' => $this->self_test() );
+    }
+
+    public function system_apply( array $input = array() ): array|WP_Error {
+        $action  = isset( $input['action'] ) ? sanitize_key( (string) $input['action'] ) : 'self_test';
+        $dry_run = ! empty( $input['dry_run'] );
+
+        if ( 'self_test' !== $action ) {
+            return new WP_Error( 'wpgpt_invalid_action', __( 'Acción de sistema no soportada.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) );
+        }
+
+        return array(
+            'summary' => array(
+                'action' => $action,
+                'dry_run' => $dry_run,
+                'executed' => $dry_run ? 0 : 1,
+            ),
+            'items' => array(
+                array(
+                    'action' => $action,
+                    'status' => $dry_run ? 'dry_run' : 'ok',
+                    'message' => $dry_run ? __( 'Acción validada, no ejecutada por dry_run.', 'wpgpt-mcp-bridge' ) : __( 'Self test ejecutado correctamente.', 'wpgpt-mcp-bridge' ),
+                    'result' => $this->self_test(),
+                ),
+            ),
+            'warnings' => array(),
+            'blocked' => array(),
+            'next_actions' => array(),
+        );
+    }
+
+    private function system_query_input_schema(): array {
+        return array( 'type' => 'object', 'additionalProperties' => false, 'properties' => array() );
+    }
+
+    private function system_inspect_input_schema(): array {
+        return array(
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => array(
+                'scope' => array( 'type' => 'string', 'enum' => array( 'bridge', 'site', 'abilities', 'ability' ) ),
+                'name'  => array( 'type' => 'string' ),
+            ),
+        );
+    }
+
+    private function system_apply_input_schema(): array {
+        return array(
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => array(
+                'action' => array( 'type' => 'string', 'enum' => array( 'self_test' ) ),
+                'dry_run' => array( 'type' => 'boolean' ),
+            ),
+            'required' => array( 'action' ),
         );
     }
 

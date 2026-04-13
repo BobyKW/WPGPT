@@ -43,4 +43,4 @@ WPGPT **depends on MCP Adapter**. It does not work as a standalone MCP server pl
 
 ## Version
 
-Current version: **2.2.0**
+Current version: **1.1.0**

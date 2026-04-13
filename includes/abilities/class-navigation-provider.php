@@ -12,40 +12,137 @@ class Navigation_Provider extends Base_Ability_Provider {
     private ?Navigation_Service $service = null;
 
     public function get_abilities(): array {
-        $menu_item_schema = array(
-            'type' => 'object',
-            'properties' => array(
-                'menu_id' => array( 'type' => 'integer' ),
-                'menu_item_id' => array( 'type' => 'integer' ),
-                'menu-item-title' => array( 'type' => 'string' ),
-                'menu-item-url' => array( 'type' => 'string' ),
-                'menu-item-description' => array( 'type' => 'string' ),
-                'menu-item-status' => array( 'type' => 'string' ),
-                'menu-item-position' => array( 'type' => 'integer' ),
-                'menu-item-parent-id' => array( 'type' => 'integer' ),
-                'object_id' => array( 'type' => 'integer' ),
-                'object' => array( 'type' => 'string' ),
-                'type' => array( 'type' => 'string' ),
+        return array(
+            'wpgpt/navigation-query' => array(
+                'label' => __( 'Navigation query', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Lista, filtra y resume menús y ubicaciones de navegación.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->navigation_query_schema(),
+                'execute_callback' => array( $this, 'navigation_query' ),
+                'output_schema' => $this->object_schema(),
+            ),
+            'wpgpt/navigation-inspect' => array(
+                'label' => __( 'Navigation inspect', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Inspecciona uno o varios menús o ubicaciones de navegación.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->navigation_inspect_schema(),
+                'execute_callback' => array( $this, 'navigation_inspect' ),
+                'output_schema' => $this->object_schema(),
+            ),
+            'wpgpt/navigation-apply' => array(
+                'label' => __( 'Navigation apply', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Ejecuta acciones controladas sobre menús, items y ubicaciones, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->navigation_apply_schema(),
+                'execute_callback' => array( $this, 'navigation_apply' ),
+                'output_schema' => $this->object_schema(),
+                'permission_callback' => array( $this, 'can_manage_site' ),
             ),
         );
+    }
+
+    private function service(): Navigation_Service {
+        if ( null === $this->service ) {
+            $this->service = new Navigation_Service();
+        }
+        return $this->service;
+    }
+
+    public function navigation_query( array $input = array() ) { return $this->service()->query( $input ); }
+    public function navigation_inspect( array $input = array() ) { return $this->service()->inspect( $input ); }
+    public function navigation_apply( array $input = array() ) { return $this->service()->apply( $input ); }
+
+    private function navigation_query_schema(): array {
         return array(
-            'wpgpt/menu-list' => array( 'label' => __( 'Menu list', 'wpgpt-mcp-bridge' ), 'description' => __( 'Lista los menús de navegación.', 'wpgpt-mcp-bridge' ), 'execute_callback' => array( $this, 'menu_list' ), 'output_schema' => $this->object_schema() ),
-            'wpgpt/menu-create' => array( 'label' => __( 'Menu create', 'wpgpt-mcp-bridge' ), 'description' => __( 'Crea un menú de navegación.', 'wpgpt-mcp-bridge' ), 'input_schema' => array( 'type' => 'object', 'properties' => array( 'name' => array( 'type' => 'string' ) ), 'required' => array( 'name' ) ), 'execute_callback' => array( $this, 'menu_create' ), 'output_schema' => $this->object_schema(), 'permission_callback' => array( $this, 'can_manage_site' ) ),
-            'wpgpt/menu-delete' => array( 'label' => __( 'Menu delete', 'wpgpt-mcp-bridge' ), 'description' => __( 'Elimina un menú de navegación.', 'wpgpt-mcp-bridge' ), 'input_schema' => array( 'type' => 'object', 'properties' => array( 'menu_id' => array( 'type' => 'integer' ) ), 'required' => array( 'menu_id' ) ), 'execute_callback' => array( $this, 'menu_delete' ), 'output_schema' => $this->object_schema(), 'permission_callback' => array( $this, 'can_delete_structure' ) ),
-            'wpgpt/menu-item-create' => array( 'label' => __( 'Menu item create', 'wpgpt-mcp-bridge' ), 'description' => __( 'Crea un item de menú.', 'wpgpt-mcp-bridge' ), 'input_schema' => $menu_item_schema + array( 'required' => array( 'menu_id' ) ), 'execute_callback' => array( $this, 'menu_item_create' ), 'output_schema' => $this->object_schema(), 'permission_callback' => array( $this, 'can_manage_site' ) ),
-            'wpgpt/menu-item-update' => array( 'label' => __( 'Menu item update', 'wpgpt-mcp-bridge' ), 'description' => __( 'Actualiza un item de menú.', 'wpgpt-mcp-bridge' ), 'input_schema' => $menu_item_schema + array( 'required' => array( 'menu_id', 'menu_item_id' ) ), 'execute_callback' => array( $this, 'menu_item_update' ), 'output_schema' => $this->object_schema(), 'permission_callback' => array( $this, 'can_manage_site' ) ),
-            'wpgpt/menu-item-delete' => array( 'label' => __( 'Menu item delete', 'wpgpt-mcp-bridge' ), 'description' => __( 'Elimina un item de menú.', 'wpgpt-mcp-bridge' ), 'input_schema' => array( 'type' => 'object', 'properties' => array( 'menu_item_id' => array( 'type' => 'integer' ), 'force' => array( 'type' => 'boolean' ) ), 'required' => array( 'menu_item_id' ) ), 'execute_callback' => array( $this, 'menu_item_delete' ), 'output_schema' => $this->object_schema(), 'permission_callback' => array( $this, 'can_delete_structure' ) ),
-            'wpgpt/nav-location-list' => array( 'label' => __( 'Nav location list', 'wpgpt-mcp-bridge' ), 'description' => __( 'Lista ubicaciones de menús del tema.', 'wpgpt-mcp-bridge' ), 'execute_callback' => array( $this, 'nav_location_list' ), 'output_schema' => $this->object_schema() ),
-            'wpgpt/nav-location-assign' => array( 'label' => __( 'Nav location assign', 'wpgpt-mcp-bridge' ), 'description' => __( 'Asigna un menú a una ubicación del tema.', 'wpgpt-mcp-bridge' ), 'input_schema' => array( 'type' => 'object', 'properties' => array( 'location' => array( 'type' => 'string' ), 'menu_id' => array( 'type' => 'integer' ) ), 'required' => array( 'location', 'menu_id' ) ), 'execute_callback' => array( $this, 'nav_location_assign' ), 'output_schema' => $this->object_schema(), 'permission_callback' => array( $this, 'can_manage_site' ) ),
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => array(
+                'scope' => array( 'type' => 'string', 'enum' => array( 'all', 'menus', 'locations' ) ),
+                'search' => array( 'type' => 'string' ),
+                'filters' => array(
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'properties' => array(
+                        'menu_id' => array( 'type' => 'integer' ),
+                        'slug' => array( 'type' => 'string' ),
+                        'location' => array( 'type' => 'string' ),
+                        'assigned' => array( 'type' => 'boolean' ),
+                    ),
+                ),
+                'limit' => array( 'type' => 'integer', 'minimum' => 1, 'maximum' => 200 ),
+                'offset' => array( 'type' => 'integer', 'minimum' => 0 ),
+            ),
         );
     }
-    private function service(): Navigation_Service { if ( null === $this->service ) { $this->service = new Navigation_Service(); } return $this->service; }
-    public function menu_list() { return $this->service()->list_menus(); }
-    public function menu_create( array $input ) { return $this->service()->create_menu( $input ); }
-    public function menu_delete( array $input ) { return $this->service()->delete_menu( $input ); }
-    public function menu_item_create( array $input ) { return $this->service()->create_menu_item( $input ); }
-    public function menu_item_update( array $input ) { return $this->service()->update_menu_item( $input ); }
-    public function menu_item_delete( array $input ) { return $this->service()->delete_menu_item( $input ); }
-    public function nav_location_list() { return $this->service()->list_locations(); }
-    public function nav_location_assign( array $input ) { return $this->service()->assign_location( $input ); }
+
+    private function navigation_inspect_schema(): array {
+        return array(
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => array(
+                'menu_id' => array( 'type' => 'integer' ),
+                'menu_ids' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
+                'slug' => array( 'type' => 'string' ),
+                'location' => array( 'type' => 'string' ),
+                'include_items' => array( 'type' => 'boolean' ),
+            ),
+        );
+    }
+
+    private function navigation_apply_schema(): array {
+        return array(
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => array(
+                'action' => array( 'type' => 'string', 'enum' => array( 'create_menu', 'update_menu', 'delete_menu', 'create_item', 'update_item', 'delete_item', 'assign_location' ) ),
+                'dry_run' => array( 'type' => 'boolean' ),
+                'targets' => array(
+                    'type' => 'array',
+                    'items' => array(
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'properties' => array(
+                            'menu_id' => array( 'type' => 'integer' ),
+                            'menu_item_id' => array( 'type' => 'integer' ),
+                            'location' => array( 'type' => 'string' ),
+                            'slug' => array( 'type' => 'string' ),
+                        ),
+                    ),
+                ),
+                'filters' => array(
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'properties' => array(
+                        'menu_id' => array( 'type' => 'integer' ),
+                        'slug' => array( 'type' => 'string' ),
+                        'location' => array( 'type' => 'string' ),
+                        'assigned' => array( 'type' => 'boolean' ),
+                        'search' => array( 'type' => 'string' ),
+                    ),
+                ),
+                'payload' => array(
+                    'type' => 'object',
+                    'additionalProperties' => true,
+                    'properties' => array(
+                        'name' => array( 'type' => 'string' ),
+                        'menu_id' => array( 'type' => 'integer' ),
+                        'menu_item_id' => array( 'type' => 'integer' ),
+                        'location' => array( 'type' => 'string' ),
+                        'menu-item-title' => array( 'type' => 'string' ),
+                        'menu-item-url' => array( 'type' => 'string' ),
+                        'menu-item-description' => array( 'type' => 'string' ),
+                        'menu-item-attr-title' => array( 'type' => 'string' ),
+                        'menu-item-target' => array( 'type' => 'string' ),
+                        'menu-item-classes' => array( 'type' => 'string' ),
+                        'menu-item-xfn' => array( 'type' => 'string' ),
+                        'menu-item-status' => array( 'type' => 'string' ),
+                        'menu-item-position' => array( 'type' => 'integer' ),
+                        'menu-item-parent-id' => array( 'type' => 'integer' ),
+                        'object_id' => array( 'type' => 'integer' ),
+                        'object' => array( 'type' => 'string' ),
+                        'type' => array( 'type' => 'string' ),
+                        'force' => array( 'type' => 'boolean' ),
+                    ),
+                ),
+            ),
+            'required' => array( 'action' ),
+        );
+    }
 }

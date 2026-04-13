@@ -14,108 +14,20 @@ class Content_Write_Provider extends Base_Ability_Provider {
 
     public function get_abilities(): array {
         return array(
-            'wpgpt/post-create' => array(
-                'label' => __( 'Post create', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Crea una entrada, página o CPT.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->post_create_schema(),
-                'execute_callback' => array( $this, 'post_create' ),
-                'output_schema' => $this->object_schema(),
+            'wpgpt/posts-apply' => array(
+                'label'               => __( 'Posts apply', 'wpgpt-mcp-bridge' ),
+                'description'         => __( 'Ejecuta acciones controladas sobre posts, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema'        => $this->posts_apply_schema(),
+                'execute_callback'    => array( $this, 'posts_apply' ),
+                'output_schema'       => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_write_content' ),
-            ),
-            'wpgpt/post-update' => array(
-                'label' => __( 'Post update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza una entrada, página o CPT.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->post_update_schema(),
-                'execute_callback' => array( $this, 'post_update' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_content' ),
-            ),
-            'wpgpt/post-duplicate' => array(
-                'label' => __( 'Post duplicate', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Duplica una entrada, página o CPT.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->post_duplicate_schema(),
-                'execute_callback' => array( $this, 'post_duplicate' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_content' ),
-            ),
-            'wpgpt/post-revision-list' => array(
-                'label' => __( 'Post revision list', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lista revisiones de un post.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->meta_get_schema(),
-                'execute_callback' => array( $this, 'post_revision_list' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_edit_content' ),
-            ),
-            'wpgpt/post-revision-restore' => array(
-                'label' => __( 'Post revision restore', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Restaura una revisión concreta de un post.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'revision_id' => array( 'type' => 'integer' ) ), 'required' => array( 'revision_id' ) ),
-                'execute_callback' => array( $this, 'post_revision_restore' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_content' ),
-            ),
-            'wpgpt/post-status-bulk-update' => array(
-                'label' => __( 'Post status bulk update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza en lote el estado de varios posts.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'post_ids' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ), 'status' => array( 'type' => 'string' ) ), 'required' => array( 'post_ids', 'status' ) ),
-                'execute_callback' => array( $this, 'post_status_bulk_update' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_content' ),
-            ),
-            'wpgpt/post-slug-update' => array(
-                'label' => __( 'Post slug update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza el slug de un post.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'post_id' => array( 'type' => 'integer' ), 'slug' => array( 'type' => 'string' ) ), 'required' => array( 'post_id', 'slug' ) ),
-                'execute_callback' => array( $this, 'post_slug_update' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_content' ),
-            ),
-            'wpgpt/post-delete' => array(
-                'label' => __( 'Post delete', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Elimina o envía a la papelera una entrada, página o CPT.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->post_delete_schema(),
-                'execute_callback' => array( $this, 'post_delete' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_delete_content' ),
-            ),
-            'wpgpt/post-meta-get' => array(
-                'label' => __( 'Post meta get', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Devuelve metadatos de un post concreto.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->meta_get_schema(),
-                'execute_callback' => array( $this, 'post_meta_get' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_edit_content' ),
-            ),
-            'wpgpt/post-meta-update' => array(
-                'label' => __( 'Post meta update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza un meta concreto de un post.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->meta_update_schema(),
-                'execute_callback' => array( $this, 'post_meta_update' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_content' ),
-            ),
-            'wpgpt/post-meta-delete' => array(
-                'label' => __( 'Post meta delete', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Elimina un meta concreto de un post.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => $this->meta_delete_schema(),
-                'execute_callback' => array( $this, 'post_meta_delete' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_delete_content' ),
             ),
         );
     }
 
-    public function post_create( array $input ): array|WP_Error { return $this->service()->create_post( $input ); }
-    public function post_update( array $input ): array|WP_Error { return $this->service()->update_post( $input ); }
-    public function post_duplicate( array $input ): array|WP_Error { return $this->service()->duplicate_post( $input ); }
-    public function post_revision_list( array $input ): array|WP_Error { return $this->service()->list_revisions( $input ); }
-    public function post_revision_restore( array $input ): array|WP_Error { return $this->service()->restore_revision( $input ); }
-    public function post_status_bulk_update( array $input ): array|WP_Error { return $this->service()->bulk_status_update( $input ); }
-    public function post_slug_update( array $input ): array|WP_Error { return $this->service()->update_slug( $input ); }
-    public function post_delete( array $input ): array|WP_Error { return $this->service()->delete_post( $input ); }
-    public function post_meta_get( array $input ): array|WP_Error { return $this->service()->get_post_meta( $input ); }
-    public function post_meta_update( array $input ): array|WP_Error { return $this->service()->update_post_meta( $input ); }
-    public function post_meta_delete( array $input ): array|WP_Error { return $this->service()->delete_post_meta( $input ); }
+    public function posts_apply( array $input ): array|WP_Error {
+        return $this->service()->apply( $input );
+    }
 
     private function service(): Content_Write_Service {
         if ( null === $this->service ) {
@@ -124,23 +36,58 @@ class Content_Write_Provider extends Base_Ability_Provider {
         return $this->service;
     }
 
-    private function post_create_schema(): array {
-        return array('type'=>'object','properties'=>array('title'=>array('type'=>'string'),'content'=>array('type'=>'string'),'excerpt'=>array('type'=>'string'),'slug'=>array('type'=>'string'),'status'=>array('type'=>'string'),'post_type'=>array('type'=>'string'),'meta'=>array('type'=>'object','additionalProperties'=>true)),'required'=>array('title'));
-    }
-    private function post_update_schema(): array {
-        return array('type'=>'object','properties'=>array('post_id'=>array('type'=>'integer'),'title'=>array('type'=>'string'),'content'=>array('type'=>'string'),'excerpt'=>array('type'=>'string'),'slug'=>array('type'=>'string'),'status'=>array('type'=>'string'),'post_type'=>array('type'=>'string'),'meta'=>array('type'=>'object','additionalProperties'=>true)),'required'=>array('post_id'));
-    }
-    private function post_duplicate_schema(): array { return array('type'=>'object','properties'=>array('post_id'=>array('type'=>'integer'),'title'=>array('type'=>'string'),'status'=>array('type'=>'string')),'required'=>array('post_id')); }
-    private function post_delete_schema(): array {
-        return array('type'=>'object','properties'=>array('post_id'=>array('type'=>'integer'),'force'=>array('type'=>'boolean')),'required'=>array('post_id'));
-    }
-    private function meta_get_schema(): array {
-        return array('type'=>'object','properties'=>array('post_id'=>array('type'=>'integer'),'meta_key'=>array('type'=>'string')),'required'=>array('post_id'));
-    }
-    private function meta_update_schema(): array {
-        return array('type'=>'object','properties'=>array('post_id'=>array('type'=>'integer'),'meta_key'=>array('type'=>'string'),'value'=>true),'required'=>array('post_id','meta_key'));
-    }
-    private function meta_delete_schema(): array {
-        return array('type'=>'object','properties'=>array('post_id'=>array('type'=>'integer'),'meta_key'=>array('type'=>'string')),'required'=>array('post_id','meta_key'));
+    private function posts_apply_schema(): array {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'properties'           => array(
+                'action'   => array(
+                    'type' => 'string',
+                    'enum' => array( 'create', 'update', 'duplicate', 'delete', 'set_status', 'set_slug', 'meta_update', 'meta_delete', 'revision_restore' ),
+                ),
+                'dry_run'  => array( 'type' => 'boolean' ),
+                'targets'  => array(
+                    'type'  => 'array',
+                    'items' => array(
+                        'type'                 => 'object',
+                        'additionalProperties' => false,
+                        'properties'           => array(
+                            'post_id' => array( 'type' => 'integer' ),
+                            'slug'    => array( 'type' => 'string' ),
+                        ),
+                    ),
+                ),
+                'filters'  => array(
+                    'type'                 => 'object',
+                    'additionalProperties' => false,
+                    'properties'           => array(
+                        'post_type'   => array( 'oneOf' => array( array( 'type' => 'string' ), array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ) ) ),
+                        'post_status' => array( 'oneOf' => array( array( 'type' => 'string' ), array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ) ) ),
+                        'author_id'   => array( 'type' => 'integer' ),
+                        'parent_id'   => array( 'type' => 'integer' ),
+                        'slug'        => array( 'type' => 'string' ),
+                        'search'      => array( 'type' => 'string' ),
+                    ),
+                ),
+                'payload'  => array(
+                    'type'                 => 'object',
+                    'additionalProperties' => true,
+                    'properties'           => array(
+                        'post_type'   => array( 'type' => 'string' ),
+                        'title'       => array( 'type' => 'string' ),
+                        'content'     => array( 'type' => 'string' ),
+                        'excerpt'     => array( 'type' => 'string' ),
+                        'slug'        => array( 'type' => 'string' ),
+                        'status'      => array( 'type' => 'string' ),
+                        'meta'        => array( 'type' => 'object', 'additionalProperties' => true ),
+                        'meta_key'    => array( 'type' => 'string' ),
+                        'value'       => true,
+                        'force'       => array( 'type' => 'boolean' ),
+                        'revision_id' => array( 'type' => 'integer' ),
+                    ),
+                ),
+            ),
+            'required'             => array( 'action' ),
+        );
     }
 }

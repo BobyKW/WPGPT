@@ -88,4 +88,32 @@ class Transfer_Service {
 
     private function pick_fields( array $row, array $fields ): array { return empty( $fields ) ? $row : array_intersect_key( $row, array_flip( $fields ) ); }
     private function to_csv( array $rows ): string { if ( empty( $rows ) ) { return ''; } $fh = fopen( 'php://temp', 'r+' ); fputcsv( $fh, array_keys( (array) $rows[0] ) ); foreach ( $rows as $row ) { fputcsv( $fh, array_values( (array) $row ) ); } rewind( $fh ); return (string) stream_get_contents( $fh ); }
+
+
+    public function query( array $input = array() ): array|WP_Error {
+        $scope = sanitize_key( (string) ( $input['scope'] ?? 'all' ) );
+        $items = array();
+        if ( 'all' === $scope || 'export' === $scope ) { $items[] = array( 'scope' => 'export', 'resources' => array( 'posts', 'users', 'terms', 'media', 'options' ) ); }
+        if ( 'all' === $scope || 'import' === $scope ) { $items[] = array( 'scope' => 'import', 'resources' => array( 'posts', 'users', 'terms' ), 'source_types' => array( 'json', 'csv' ) ); }
+        return array( 'summary' => array( 'scope' => $scope, 'returned' => count( $items ) ), 'items' => $items, 'warnings' => array(), 'next_actions' => array() );
+    }
+    public function inspect( array $input = array() ): array|WP_Error {
+        $scope = sanitize_key( (string) ( $input['scope'] ?? 'export' ) );
+        if ( 'import' === $scope ) {
+            $preview = $this->import_parse( $input + array( 'resource' => $input['resource'] ?? 'posts', 'source_type' => $input['source_type'] ?? 'json', 'source_content' => $input['source_content'] ?? '[]' ) );
+            if ( is_wp_error( $preview ) ) { return $preview; }
+            return array( 'summary' => array( 'scope' => 'import', 'inspected' => 1 ), 'items' => array( $preview ), 'warnings' => array(), 'next_actions' => array() );
+        }
+        return array( 'summary' => array( 'scope' => 'export', 'inspected' => 1 ), 'items' => array( array( 'resource' => sanitize_key( (string) ( $input['resource'] ?? 'posts' ) ), 'formats' => array( 'json', 'csv' ) ) ), 'warnings' => array(), 'next_actions' => array() );
+    }
+    public function apply( array $input = array() ): array|WP_Error {
+        $action = sanitize_key( (string) ( $input['action'] ?? '' ) );
+        $dry_run = ! empty( $input['dry_run'] );
+        $payload = isset( $input['payload'] ) && is_array( $input['payload'] ) ? $input['payload'] : array();
+        if ( $dry_run ) { return array( 'summary' => array( 'action' => $action, 'dry_run' => true ), 'items' => array(), 'warnings' => array(), 'blocked' => array(), 'next_actions' => array( __( 'Repite la misma llamada con dry_run=false para aplicar los cambios validados.', 'wpgpt-mcp-bridge' ) ) ); }
+        $result = 'export' === $action ? $this->export_run( $payload ) : ( 'import' === $action ? $this->import_run( $payload ) : new WP_Error( 'wpgpt_transfer_action_invalid', __( 'Acción de transfer no válida.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) ) );
+        if ( is_wp_error( $result ) ) { return $result; }
+        return array( 'summary' => array( 'action' => $action, 'dry_run' => false ), 'items' => array( $result ), 'warnings' => array(), 'blocked' => array(), 'next_actions' => array() );
+    }
+
 }

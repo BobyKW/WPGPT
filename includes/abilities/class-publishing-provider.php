@@ -13,79 +13,159 @@ class Publishing_Provider extends Base_Ability_Provider {
 
     public function get_abilities(): array {
         return array(
-            'wpgpt/blog-draft-create' => array(
-                'label' => __( 'Blog draft create', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Crea un borrador de blog con contenido, categorías, etiquetas y metadatos SEO básicos.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'title' => array( 'type' => 'string' ), 'content' => array( 'type' => 'string' ), 'excerpt' => array( 'type' => 'string' ), 'slug' => array( 'type' => 'string' ), 'post_status' => array( 'type' => 'string' ), 'categories' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ), 'tags' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ), 'seo' => true ), 'required' => array( 'title' ) ),
-                'execute_callback' => array( $this, 'blog_draft_create' ),
+            'wpgpt/drafts-query' => array(
+                'label' => __( 'Drafts query', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Resume la capacidad de creación asistida de borradores y sus parámetros admitidos.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => array( 'type' => 'object', 'additionalProperties' => false, 'properties' => array() ),
+                'execute_callback' => array( $this, 'drafts_query' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_write_content' ),
             ),
-            'wpgpt/terms-list' => array(
-                'label' => __( 'Terms list', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Lista términos de una taxonomía.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'taxonomy' => array( 'type' => 'string' ), 'hide_empty' => array( 'type' => 'boolean' ), 'limit' => array( 'type' => 'integer' ) ), 'required' => array( 'taxonomy' ) ),
-                'execute_callback' => array( $this, 'terms_list' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/term-get' => array(
-                'label' => __( 'Term get', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Obtiene un término concreto.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'taxonomy' => array( 'type' => 'string' ), 'term_id' => array( 'type' => 'integer' ) ), 'required' => array( 'taxonomy', 'term_id' ) ),
-                'execute_callback' => array( $this, 'term_get' ),
-                'output_schema' => $this->object_schema(),
-            ),
-            'wpgpt/term-create' => array(
-                'label' => __( 'Term create', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Crea un término en una taxonomía existente.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'taxonomy' => array( 'type' => 'string' ), 'name' => array( 'type' => 'string' ), 'slug' => array( 'type' => 'string' ) ), 'required' => array( 'taxonomy', 'name' ) ),
-                'execute_callback' => array( $this, 'term_create' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_structure' ),
-            ),
-            'wpgpt/term-update' => array(
-                'label' => __( 'Term update', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Actualiza un término existente.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'taxonomy' => array( 'type' => 'string' ), 'term_id' => array( 'type' => 'integer' ), 'name' => array( 'type' => 'string' ), 'slug' => array( 'type' => 'string' ), 'description' => array( 'type' => 'string' ), 'parent' => array( 'type' => 'integer' ) ), 'required' => array( 'taxonomy', 'term_id' ) ),
-                'execute_callback' => array( $this, 'term_update' ),
-                'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_write_structure' ),
-            ),
-            'wpgpt/term-assign-to-post' => array(
-                'label' => __( 'Term assign to post', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Asigna un término a un post.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'post_id' => array( 'type' => 'integer' ), 'taxonomy' => array( 'type' => 'string' ), 'term_id' => array( 'type' => 'integer' ), 'append' => array( 'type' => 'boolean' ) ), 'required' => array( 'post_id', 'taxonomy', 'term_id' ) ),
-                'execute_callback' => array( $this, 'term_assign_to_post' ),
+            'wpgpt/drafts-inspect' => array(
+                'label' => __( 'Drafts inspect', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Inspecciona la operación de creación asistida de borradores.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => array( 'type' => 'object', 'additionalProperties' => false, 'properties' => array() ),
+                'execute_callback' => array( $this, 'drafts_inspect' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_write_content' ),
             ),
-            'wpgpt/term-remove-from-post' => array(
-                'label' => __( 'Term remove from post', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Elimina la asignación de un término en un post.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'post_id' => array( 'type' => 'integer' ), 'taxonomy' => array( 'type' => 'string' ), 'term_id' => array( 'type' => 'integer' ) ), 'required' => array( 'post_id', 'taxonomy', 'term_id' ) ),
-                'execute_callback' => array( $this, 'term_remove_from_post' ),
+            'wpgpt/drafts-apply' => array(
+                'label' => __( 'Drafts apply', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Crea borradores asistidos, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->drafts_apply_schema(),
+                'execute_callback' => array( $this, 'drafts_apply' ),
                 'output_schema' => $this->object_schema(),
                 'permission_callback' => array( $this, 'can_write_content' ),
             ),
-            'wpgpt/term-delete' => array(
-                'label' => __( 'Term delete', 'wpgpt-mcp-bridge' ),
-                'description' => __( 'Elimina un término de una taxonomía.', 'wpgpt-mcp-bridge' ),
-                'input_schema' => array( 'type' => 'object', 'properties' => array( 'taxonomy' => array( 'type' => 'string' ), 'term_id' => array( 'type' => 'integer' ) ), 'required' => array( 'taxonomy', 'term_id' ) ),
-                'execute_callback' => array( $this, 'term_delete' ),
+            'wpgpt/terms-query' => array(
+                'label' => __( 'Terms query', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Lista, filtra y resume términos y taxonomías.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->terms_query_schema(),
+                'execute_callback' => array( $this, 'terms_query' ),
                 'output_schema' => $this->object_schema(),
-                'permission_callback' => array( $this, 'can_delete_structure' ),
+            ),
+            'wpgpt/terms-inspect' => array(
+                'label' => __( 'Terms inspect', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Inspecciona uno o varios términos por taxonomy y term_id.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->terms_inspect_schema(),
+                'execute_callback' => array( $this, 'terms_inspect' ),
+                'output_schema' => $this->object_schema(),
+            ),
+            'wpgpt/terms-apply' => array(
+                'label' => __( 'Terms apply', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Ejecuta acciones controladas sobre términos y asignaciones, con soporte dry_run.', 'wpgpt-mcp-bridge' ),
+                'input_schema' => $this->terms_apply_schema(),
+                'execute_callback' => array( $this, 'terms_apply' ),
+                'output_schema' => $this->object_schema(),
+                'permission_callback' => array( $this, 'can_write_content' ),
             ),
         );
     }
 
-    public function blog_draft_create( array $input ) { return $this->service()->create_blog_draft( $input ); }
-    public function terms_list( array $input ) { return $this->service()->list_terms( $input ); }
-    public function term_get( array $input ) { return $this->service()->get_term_data( $input ); }
-    public function term_create( array $input ) { return $this->service()->create_term( $input ); }
-    public function term_update( array $input ) { return $this->service()->update_term_data( $input ); }
-    public function term_assign_to_post( array $input ) { return $this->service()->assign_term_to_post( $input ); }
-    public function term_remove_from_post( array $input ) { return $this->service()->remove_term_from_post( $input ); }
-    public function term_delete( array $input ) { return $this->service()->delete_term( $input ); }
+    public function drafts_query( array $input = array() ) { return array( 'summary' => array( 'operation' => 'create_blog_draft' ), 'items' => array( array( 'fields' => array( 'title', 'content', 'excerpt', 'slug', 'post_status', 'categories', 'tags', 'seo' ) ) ), 'warnings' => array(), 'next_actions' => array() ); }
+    public function drafts_inspect( array $input = array() ) { return array( 'operation' => 'create_blog_draft', 'required' => array( 'title' ), 'optional' => array( 'content', 'excerpt', 'slug', 'post_status', 'categories', 'tags', 'seo' ) ); }
+    public function drafts_apply( array $input ) { $dry_run = ! empty( $input['dry_run'] ); if ( $dry_run ) { return array( 'summary' => array( 'action' => 'create', 'dry_run' => true, 'executed' => 0 ), 'items' => array( array( 'status' => 'dry_run', 'message' => __( 'Acción validada, no ejecutada por dry_run.', 'wpgpt-mcp-bridge' ) ) ), 'warnings' => array(), 'blocked' => array(), 'next_actions' => array() ); } return $this->service()->create_blog_draft( $input['payload'] ?? $input ); }
+    public function terms_query( array $input = array() ) { return $this->service()->query( $input ); }
+    public function terms_inspect( array $input = array() ) { return $this->service()->inspect( $input ); }
+    public function terms_apply( array $input = array() ) { return $this->service()->apply( $input ); }
 
     private function service(): Publishing_Service { if ( null === $this->service ) { $this->service = new Publishing_Service(); } return $this->service; }
+
+    private function drafts_apply_schema(): array {
+        return array( 'type' => 'object', 'additionalProperties' => false, 'properties' => array( 'dry_run' => array( 'type' => 'boolean' ), 'payload' => array( 'type' => 'object', 'additionalProperties' => true, 'properties' => array( 'title' => array( 'type' => 'string' ), 'content' => array( 'type' => 'string' ), 'excerpt' => array( 'type' => 'string' ), 'slug' => array( 'type' => 'string' ), 'post_status' => array( 'type' => 'string' ), 'categories' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ), 'tags' => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ), 'seo' => array( 'type' => 'object', 'additionalProperties' => true ) ) ) ) );
+    }
+
+    private function terms_query_schema(): array {
+        return array(
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => array(
+                'search' => array( 'type' => 'string' ),
+                'filters' => array(
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'properties' => array(
+                        'taxonomy' => array( 'type' => 'string' ),
+                        'term_id' => array( 'type' => 'integer' ),
+                        'slug' => array( 'type' => 'string' ),
+                        'parent' => array( 'type' => 'integer' ),
+                        'hide_empty' => array( 'type' => 'boolean' ),
+                    ),
+                ),
+                'limit' => array( 'type' => 'integer', 'minimum' => 1, 'maximum' => 200 ),
+                'offset' => array( 'type' => 'integer', 'minimum' => 0 ),
+            ),
+        );
+    }
+
+    private function terms_inspect_schema(): array {
+        return array(
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => array(
+                'taxonomy' => array( 'type' => 'string' ),
+                'term_id' => array( 'type' => 'integer' ),
+                'targets' => array(
+                    'type' => 'array',
+                    'items' => array(
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'properties' => array(
+                            'taxonomy' => array( 'type' => 'string' ),
+                            'term_id' => array( 'type' => 'integer' ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+    }
+
+    private function terms_apply_schema(): array {
+        return array(
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => array(
+                'action' => array( 'type' => 'string', 'enum' => array( 'create', 'update', 'assign_to_post', 'remove_from_post', 'delete' ) ),
+                'dry_run' => array( 'type' => 'boolean' ),
+                'targets' => array(
+                    'type' => 'array',
+                    'items' => array(
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'properties' => array(
+                            'taxonomy' => array( 'type' => 'string' ),
+                            'term_id' => array( 'type' => 'integer' ),
+                        ),
+                    ),
+                ),
+                'filters' => array(
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'properties' => array(
+                        'taxonomy' => array( 'type' => 'string' ),
+                        'term_id' => array( 'type' => 'integer' ),
+                        'slug' => array( 'type' => 'string' ),
+                        'parent' => array( 'type' => 'integer' ),
+                        'hide_empty' => array( 'type' => 'boolean' ),
+                        'search' => array( 'type' => 'string' ),
+                    ),
+                ),
+                'payload' => array(
+                    'type' => 'object',
+                    'additionalProperties' => true,
+                    'properties' => array(
+                        'taxonomy' => array( 'type' => 'string' ),
+                        'term_id' => array( 'type' => 'integer' ),
+                        'name' => array( 'type' => 'string' ),
+                        'slug' => array( 'type' => 'string' ),
+                        'description' => array( 'type' => 'string' ),
+                        'parent' => array( 'type' => 'integer' ),
+                        'post_id' => array( 'type' => 'integer' ),
+                        'append' => array( 'type' => 'boolean' ),
+                    ),
+                ),
+            ),
+            'required' => array( 'action' ),
+        );
+    }
 }

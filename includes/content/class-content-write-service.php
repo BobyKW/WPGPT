@@ -3,12 +3,107 @@
 namespace WPGPT\MCPBridge\Content;
 
 use WP_Error;
+use WP_Post;
+use WP_Query;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
 class Content_Write_Service {
+    public function apply( array $input ): array|WP_Error {
+        $action  = isset( $input['action'] ) ? sanitize_key( (string) $input['action'] ) : '';
+        $dry_run = ! empty( $input['dry_run'] );
+        $payload = isset( $input['payload'] ) && is_array( $input['payload'] ) ? $input['payload'] : array();
+
+        if ( '' === $action ) {
+            return new WP_Error( 'wpgpt_posts_apply_action_required', __( 'Debes indicar una acción válida.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) );
+        }
+
+        if ( 'create' === $action ) {
+            if ( $dry_run ) {
+                return array(
+                    'summary'      => array( 'action' => $action, 'dry_run' => true, 'resolved_targets' => 1, 'executed' => 0, 'blocked' => 0 ),
+                    'items'        => array( array( 'status' => 'dry_run', 'action' => 'create', 'message' => __( 'Acción validada, no ejecutada por dry_run.', 'wpgpt-mcp-bridge' ) ) ),
+                    'warnings'     => array(),
+                    'blocked'      => array(),
+                    'next_actions' => array( __( 'Repite la misma llamada con dry_run=false para crear el post.', 'wpgpt-mcp-bridge' ) ),
+                );
+            }
+            $result = $this->create_post( $payload );
+            return is_wp_error( $result ) ? $result : array(
+                'summary'      => array( 'action' => $action, 'dry_run' => false, 'resolved_targets' => 1, 'executed' => 1, 'blocked' => 0 ),
+                'items'        => array( array_merge( $result, array( 'status' => 'created' ) ) ),
+                'warnings'     => array(),
+                'blocked'      => array(),
+                'next_actions' => array(),
+            );
+        }
+
+        $targets = $this->resolve_targets( $input );
+        if ( empty( $targets ) ) {
+            return new WP_Error( 'wpgpt_posts_apply_no_targets', __( 'No se han resuelto posts para esa acción.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) );
+        }
+
+        $items = array();
+        $blocked = array();
+        foreach ( $targets as $post_id ) {
+            $post = get_post( $post_id );
+            if ( ! $post ) {
+                continue;
+            }
+
+            $blocked_reason = $this->blocked_reason_for_action( $action, $post, $payload );
+            if ( '' !== $blocked_reason ) {
+                $blocked[] = array(
+                    'post_id' => (int) $post->ID,
+                    'title'   => get_the_title( $post ),
+                    'action'  => $action,
+                    'reason'  => $blocked_reason,
+                );
+                continue;
+            }
+
+            if ( $dry_run ) {
+                $items[] = array(
+                    'post_id' => (int) $post->ID,
+                    'title'   => get_the_title( $post ),
+                    'action'  => $action,
+                    'status'  => 'dry_run',
+                    'message' => __( 'Acción validada, no ejecutada por dry_run.', 'wpgpt-mcp-bridge' ),
+                );
+                continue;
+            }
+
+            $result = $this->execute_action( $action, $post, $payload );
+            if ( is_wp_error( $result ) ) {
+                $blocked[] = array(
+                    'post_id' => (int) $post->ID,
+                    'title'   => get_the_title( $post ),
+                    'action'  => $action,
+                    'reason'  => $result->get_error_message(),
+                );
+                continue;
+            }
+
+            $items[] = array_merge( $result, array( 'status' => 'executed', 'action' => $action ) );
+        }
+
+        return array(
+            'summary'      => array(
+                'action'           => $action,
+                'dry_run'          => $dry_run,
+                'resolved_targets' => count( $targets ),
+                'executed'         => $dry_run ? 0 : count( $items ),
+                'blocked'          => count( $blocked ),
+            ),
+            'items'        => $items,
+            'warnings'     => array(),
+            'blocked'      => $blocked,
+            'next_actions' => $dry_run ? array( __( 'Repite la misma llamada con dry_run=false para aplicar los cambios validados.', 'wpgpt-mcp-bridge' ) ) : array(),
+        );
+    }
+
     public function create_post( array $input ): array|WP_Error {
         $postarr = $this->normalize_post_input( $input, false );
         if ( is_wp_error( $postarr ) ) {
@@ -77,13 +172,10 @@ class Content_Write_Service {
                 add_post_meta( $new_id, $key, maybe_unserialize( $value ) );
             }
         }
-        $terms = wp_get_object_terms( $post_id, get_object_taxonomies( $source->post_type ), array( 'fields' => 'ids' ) );
-        if ( ! is_wp_error( $terms ) ) {
-            foreach ( get_object_taxonomies( $source->post_type ) as $taxonomy ) {
-                $tax_terms = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'ids' ) );
-                if ( ! is_wp_error( $tax_terms ) ) {
-                    wp_set_object_terms( $new_id, $tax_terms, $taxonomy, false );
-                }
+        foreach ( get_object_taxonomies( $source->post_type ) as $taxonomy ) {
+            $tax_terms = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'ids' ) );
+            if ( ! is_wp_error( $tax_terms ) ) {
+                wp_set_object_terms( $new_id, $tax_terms, $taxonomy, false );
             }
         }
         return $this->format_post_result( (int) $new_id, 'duplicated' );
@@ -237,6 +329,113 @@ class Content_Write_Service {
         );
     }
 
+    private function resolve_targets( array $input ): array {
+        $targets = array();
+        if ( ! empty( $input['targets'] ) && is_array( $input['targets'] ) ) {
+            foreach ( $input['targets'] as $target ) {
+                if ( ! is_array( $target ) ) {
+                    continue;
+                }
+                if ( ! empty( $target['post_id'] ) ) {
+                    $targets[] = absint( $target['post_id'] );
+                    continue;
+                }
+                if ( ! empty( $target['slug'] ) ) {
+                    $post = get_page_by_path( sanitize_title( (string) $target['slug'] ), OBJECT, 'any' );
+                    if ( $post instanceof WP_Post ) {
+                        $targets[] = (int) $post->ID;
+                    }
+                }
+            }
+        }
+
+        $filters = isset( $input['filters'] ) && is_array( $input['filters'] ) ? $input['filters'] : array();
+        if ( empty( $targets ) && ! empty( $filters ) ) {
+            $args = array(
+                'post_type'      => $this->normalize_post_type_filter( $filters['post_type'] ?? 'any' ),
+                'post_status'    => $this->normalize_post_status_filter( $filters['post_status'] ?? 'any' ),
+                'posts_per_page' => 100,
+                'fields'         => 'ids',
+                's'              => isset( $filters['search'] ) ? sanitize_text_field( (string) $filters['search'] ) : '',
+            );
+            if ( isset( $filters['author_id'] ) ) {
+                $args['author'] = absint( $filters['author_id'] );
+            }
+            if ( isset( $filters['parent_id'] ) ) {
+                $args['post_parent'] = absint( $filters['parent_id'] );
+            }
+            if ( ! empty( $filters['slug'] ) ) {
+                $args['name'] = sanitize_title( (string) $filters['slug'] );
+            }
+            $query = new WP_Query( $args );
+            $targets = array_merge( $targets, array_map( 'intval', $query->posts ) );
+        }
+
+        return array_values( array_unique( array_filter( $targets ) ) );
+    }
+
+    private function blocked_reason_for_action( string $action, WP_Post $post, array $payload ): string {
+        switch ( $action ) {
+            case 'set_status':
+                $status = sanitize_key( (string) ( $payload['status'] ?? '' ) );
+                if ( '' === $status ) {
+                    return __( 'Debes indicar payload.status.', 'wpgpt-mcp-bridge' );
+                }
+                if ( $post->post_status === $status ) {
+                    return __( 'El post ya tiene ese estado.', 'wpgpt-mcp-bridge' );
+                }
+                break;
+            case 'set_slug':
+                $slug = sanitize_title( (string) ( $payload['slug'] ?? '' ) );
+                if ( '' === $slug ) {
+                    return __( 'Debes indicar payload.slug.', 'wpgpt-mcp-bridge' );
+                }
+                if ( $post->post_name === $slug ) {
+                    return __( 'El post ya tiene ese slug.', 'wpgpt-mcp-bridge' );
+                }
+                break;
+            case 'meta_update':
+            case 'meta_delete':
+                if ( empty( $payload['meta_key'] ) ) {
+                    return __( 'Debes indicar payload.meta_key.', 'wpgpt-mcp-bridge' );
+                }
+                break;
+            case 'revision_restore':
+                if ( empty( $payload['revision_id'] ) ) {
+                    return __( 'Debes indicar payload.revision_id.', 'wpgpt-mcp-bridge' );
+                }
+                break;
+            case 'update':
+                if ( empty( $payload ) ) {
+                    return __( 'Debes indicar payload con cambios para update.', 'wpgpt-mcp-bridge' );
+                }
+                break;
+        }
+        return '';
+    }
+
+    private function execute_action( string $action, WP_Post $post, array $payload ): array|WP_Error {
+        switch ( $action ) {
+            case 'update':
+                return $this->update_post( array_merge( $payload, array( 'post_id' => (int) $post->ID ) ) );
+            case 'duplicate':
+                return $this->duplicate_post( array_merge( $payload, array( 'post_id' => (int) $post->ID ) ) );
+            case 'delete':
+                return $this->delete_post( array( 'post_id' => (int) $post->ID, 'force' => ! empty( $payload['force'] ) ) );
+            case 'set_status':
+                return $this->bulk_status_update( array( 'post_ids' => array( (int) $post->ID ), 'status' => (string) $payload['status'] ) );
+            case 'set_slug':
+                return $this->update_slug( array( 'post_id' => (int) $post->ID, 'slug' => (string) $payload['slug'] ) );
+            case 'meta_update':
+                return $this->update_post_meta( array( 'post_id' => (int) $post->ID, 'meta_key' => (string) $payload['meta_key'], 'value' => $payload['value'] ?? '' ) );
+            case 'meta_delete':
+                return $this->delete_post_meta( array( 'post_id' => (int) $post->ID, 'meta_key' => (string) $payload['meta_key'] ) );
+            case 'revision_restore':
+                return $this->restore_revision( array( 'revision_id' => absint( $payload['revision_id'] ) ) );
+        }
+        return new WP_Error( 'wpgpt_posts_apply_action_unsupported', __( 'La acción indicada no está soportada.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) );
+    }
+
     private function normalize_post_input( array $input, bool $is_update ): array|WP_Error {
         $postarr = array();
         $map     = array(
@@ -317,5 +516,23 @@ class Content_Write_Service {
             'permalink'    => get_permalink( $post_id ),
             'modified_gmt' => $post ? $post->post_modified_gmt : '',
         );
+    }
+
+    private function normalize_post_type_filter( $value ) {
+        if ( is_array( $value ) ) {
+            $types = array_values( array_filter( array_map( 'sanitize_key', $value ) ) );
+            return empty( $types ) ? 'any' : $types;
+        }
+        $value = sanitize_key( (string) $value );
+        return '' === $value || 'any' === $value ? 'any' : $value;
+    }
+
+    private function normalize_post_status_filter( $value ) {
+        if ( is_array( $value ) ) {
+            $statuses = array_values( array_filter( array_map( 'sanitize_key', $value ) ) );
+            return empty( $statuses ) ? array_keys( get_post_stati() ) : $statuses;
+        }
+        $value = sanitize_key( (string) $value );
+        return '' === $value || 'any' === $value ? array_keys( get_post_stati() ) : $value;
     }
 }

@@ -125,4 +125,45 @@ class Maintenance_Service {
 
     public static function is_enabled(): bool { return '1' === (string) get_option( self::OPTION_ENABLED, '0' ); }
     public static function get_message(): string { return (string) get_option( self::OPTION_MESSAGE, __( 'Site under maintenance. Please come back soon.', 'wpgpt-mcp-bridge' ) ); }
+
+
+    public function query( array $input = array() ): array|WP_Error {
+        $scope = sanitize_key( (string) ( $input['scope'] ?? 'all' ) );
+        $items = array();
+        if ( 'all' === $scope || 'cache' === $scope ) { $items[] = array( 'scope' => 'cache', 'item' => $this->cache_manage( array( 'action' => 'inspect' ) ) ); }
+        if ( 'all' === $scope || 'transients' === $scope ) { $items[] = array( 'scope' => 'transients', 'item' => $this->transients_manage( array( 'action' => 'list', 'limit' => 20 ) ) ); }
+        if ( 'all' === $scope || 'maintenance_mode' === $scope ) { $items[] = array( 'scope' => 'maintenance_mode', 'item' => array( 'enabled' => self::is_enabled(), 'message' => self::get_message() ) ); }
+        return array( 'summary' => array( 'scope' => $scope, 'returned' => count( $items ) ), 'items' => $items, 'warnings' => array(), 'next_actions' => array() );
+    }
+    public function inspect( array $input = array() ): array|WP_Error {
+        $scope = sanitize_key( (string) ( $input['scope'] ?? 'cache' ) );
+        $result = match ( $scope ) {
+            'cache' => $this->cache_manage( array( 'action' => 'inspect' ) ),
+            'transients' => $this->transients_manage( array( 'action' => ! empty( $input['search'] ) ? 'search' : 'list', 'search' => $input['search'] ?? '', 'limit' => $input['limit'] ?? 20 ) ),
+            'maintenance_mode' => array( 'enabled' => self::is_enabled(), 'message' => self::get_message() ),
+            'media_regenerate' => array( 'supported' => true ),
+            'search_replace' => array( 'supported' => true ),
+            default => new WP_Error( 'wpgpt_maintenance_scope_invalid', __( 'Scope de maintenance no válido.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) ),
+        };
+        if ( is_wp_error( $result ) ) { return $result; }
+        return array( 'summary' => array( 'scope' => $scope, 'inspected' => 1 ), 'items' => array( array( 'scope' => $scope, 'item' => $result ) ), 'warnings' => array(), 'next_actions' => array() );
+    }
+    public function apply( array $input = array() ): array|WP_Error {
+        $action = sanitize_key( (string) ( $input['action'] ?? '' ) );
+        $dry_run = ! empty( $input['dry_run'] );
+        $payload = isset( $input['payload'] ) && is_array( $input['payload'] ) ? $input['payload'] : array();
+        if ( $dry_run ) { return array( 'summary' => array( 'action' => $action, 'dry_run' => true ), 'items' => array(), 'warnings' => array(), 'blocked' => array(), 'next_actions' => array( __( 'Repite la misma llamada con dry_run=false para aplicar los cambios validados.', 'wpgpt-mcp-bridge' ) ) ); }
+        $result = match ( $action ) {
+            'flush_cache' => $this->cache_manage( array( 'action' => 'flush' ) ),
+            'delete_transients' => $this->transients_manage( array( 'action' => 'delete', 'keys' => $payload['keys'] ?? array() ) ),
+            'delete_expired_transients' => $this->transients_manage( array( 'action' => 'delete_expired' ) ),
+            'media_regenerate' => $this->media_regenerate( $payload ),
+            'search_replace' => $this->search_replace( $payload ),
+            'set_maintenance_mode' => $this->maintenance_mode_set( $payload ),
+            default => new WP_Error( 'wpgpt_maintenance_action_invalid', __( 'Acción de maintenance no válida.', 'wpgpt-mcp-bridge' ), array( 'status' => 400 ) ),
+        };
+        if ( is_wp_error( $result ) ) { return $result; }
+        return array( 'summary' => array( 'action' => $action, 'dry_run' => false ), 'items' => array( $result ), 'warnings' => array(), 'blocked' => array(), 'next_actions' => array() );
+    }
+
 }
