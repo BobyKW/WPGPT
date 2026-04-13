@@ -3,7 +3,7 @@ Contributors: openai
 Requires at least: 6.6
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 2.2.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,9 +75,7 @@ Yes. You can select a different user in the admin settings, save the change, and
 
 == Changelog ==
 
-= 2.2.0 =
-* Rebranded the plugin as WPGPT.
-* Added cleaner admin organization.
-* Added Application Password generation for VS Code and similar editors.
-* Added connection snippets for ChatGPT and editor workflows.
-* Updated branding, naming, and setup guidance.
+= 1.1.0 =
+* Major internal refactor and stabilization.
+* Optimized MCP abilities for WordPress.
+* Improved security and permission handling.
