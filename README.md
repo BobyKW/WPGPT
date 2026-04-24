@@ -1,129 +1,106 @@
 # WPGPT - MCP Extensor & ChatGPT Connection
 
-WPGPT is a standalone WordPress MCP bridge for connecting **ChatGPT** and other MCP-compatible clients to a controlled set of WordPress abilities.
+WPGPT is a standalone WordPress MCP bridge for ChatGPT and compatible MCP clients. It exposes controlled WordPress abilities through a native MCP endpoint, with persistent token authentication, granular permissions, compact ability discovery, and a secure sandbox for advanced filesystem and PHP-assisted maintenance.
 
-It exposes a native MCP endpoint from WordPress, lets you choose exactly which abilities are available, and includes a secure sandbox area for advanced filesystem and PHP-assisted maintenance workflows.
+## Highlights
 
-## Current version
+- Native WPGPT MCP endpoint. MCP Adapter is not required for the ChatGPT connection.
+- Persistent MCP token: plugin updates and ability changes do not require reconnecting ChatGPT.
+- Compact ability discovery: ChatGPT sees one grouped ability per module instead of dozens of detailed tools.
+- Compact preview shows available actions and actions blocked by the current permission switches.
+- Detailed internal allowlist: query, inspect and apply actions remain individually controlled.
+- Safer permission UI with **Safe mode: block changes**.
+- Dedicated WordPress admin sidebar menu.
+- Secure sandbox at `wp-content/wpgpt-sandbox/`.
+- Optional persistent sandbox PHP loader with safe mode and `.crashed` recovery.
+- Backups before risky file operations.
+- JSONL audit logs for dangerous actions.
 
-**1.2.0**
+## Version 1.3.0
 
-## Main features
+This release consolidates the compact discovery work on top of the 1.2 standalone MCP and secure sandbox foundation. It keeps the detailed abilities internally, but exposes a cleaner grouped interface to MCP clients so users can enable broad functionality without flooding discovery with dozens of tools.
 
-- Standalone WordPress MCP endpoint. MCP Adapter is no longer required for the ChatGPT connection.
-- Bearer-token connection flow for ChatGPT and remote MCP clients.
-- WordPress Application Password helper for editors or clients that use WordPress credentials.
-- Selectable MCP operating user.
-- Ability allowlist: expose only the abilities you actually want to use.
-- Safer permissions model:
-  - Safe mode: block changes.
-  - Read files.
-  - Write/edit files.
-  - Delete files.
-  - Explicit deletion confirmation.
-- `Danger` ability category for advanced filesystem and sandbox operations.
-- Secure sandbox folder at `wp-content/wpgpt-sandbox/`.
-- Optional persistent sandbox PHP loader with safe mode and crash detection.
-- `.disabled` support for enabling/disabling sandbox PHP files.
-- `.crashed` safe mode marker when sandbox loading fails.
-- Automatic backups before dangerous file operations.
-- JSONL audit log for dangerous actions.
-- Admin sidebar menu with separate Settings and Sandbox pages.
-- GitHub-based plugin update support.
+## Compact ability discovery
+
+Earlier versions could expose many detailed abilities such as:
+
+```text
+wpgpt/posts-query
+wpgpt/posts-inspect
+wpgpt/posts-apply
+```
+
+WPGPT now exposes these as one compact MCP-facing ability:
+
+```text
+wpgpt/posts
+```
+
+The client then chooses the internal action:
+
+```json
+{
+  "action": "query",
+  "parameters": {}
+}
+```
+
+The detailed abilities still exist internally and remain the security boundary. Each compact action re-validates:
+
+- ability allowlist;
+- WordPress user permissions;
+- safe mode / read-only state;
+- filesystem read/write/delete permissions;
+- deletion confirmation settings;
+- detailed ability policy.
+
+This greatly reduces discovery noise and helps avoid excessive MCP handshake requests. The admin preview separates actions that are actually executable from actions that are selected but blocked by current permissions.
+
+## Danger abilities
+
+Danger abilities are grouped as:
+
+```text
+wpgpt/danger
+```
+
+Available actions depend on what is enabled in the settings:
+
+```text
+list_directory
+read_file
+write_file
+edit_file
+delete_file
+execute_php
+disable_file
+enable_file
+```
+
+These actions are powerful. Keep write, delete and PHP execution disabled unless you are performing controlled maintenance.
 
 ## Requirements
 
-- WordPress 6.6 or higher.
-- PHP 8.1 or higher.
-- Administrator access to configure the plugin.
-
-MCP Adapter is not required for the native WPGPT ChatGPT connection.
+- WordPress 6.6+
+- PHP 8.1+
 
 ## Installation
 
-1. Install and activate **WPGPT - MCP Extensor & ChatGPT Connection**.
-2. Open **WPGPT MCP** in the WordPress admin sidebar.
-3. Select the WordPress user that MCP should operate as.
-4. Configure permissions.
-5. Choose the abilities that should be exposed.
-6. Generate or reuse the MCP token.
-7. Copy the full MCP endpoint URL into ChatGPT or your MCP client.
+1. Upload and activate the plugin.
+2. Open **WPGPT MCP** in the WordPress sidebar.
+3. Select the WordPress user used by MCP.
+4. Review permissions and allowed abilities.
+5. Generate or reuse the MCP token.
+6. Connect ChatGPT using the full tokenized MCP endpoint.
 
-## Updating
+## Token behavior
 
-Updating the plugin does not require regenerating the MCP token.
+Do not regenerate the token for normal updates or ability changes.
 
-Use **Regenerate token** only when you want to invalidate the previous connection, for example after a suspected leak or when intentionally replacing the client connection.
-
-Changing abilities or permissions only requires saving the settings. The MCP endpoint reads the current configuration during discovery.
-
-## Connection modes
-
-### ChatGPT
-
-Use the full tokenized endpoint shown in the plugin settings page.
-
-The endpoint follows this structure:
-
-```text
-/wp-json/wpgpt-mcp/v1/YOUR_TOKEN
-```
-
-### Editors and other clients
-
-For clients that support WordPress credentials, the plugin can generate a WordPress Application Password for the selected user.
-
-## Dangerous abilities
-
-The `Danger` category contains advanced abilities for filesystem and sandbox work:
-
-```text
-wpgpt/danger-list-directory
-wpgpt/danger-read-file
-wpgpt/danger-write-file
-wpgpt/danger-edit-file
-wpgpt/danger-delete-file
-wpgpt/danger-execute-php
-wpgpt/danger-disable-file
-wpgpt/danger-enable-file
-```
-
-These abilities are powerful. Keep them disabled unless you need them for a specific task.
-
-Recommended default posture:
-
-- Enable read/list abilities when auditing.
-- Enable write/edit only during controlled work.
-- Keep delete disabled unless needed.
-- Keep PHP execution disabled unless needed.
-- Keep persistent sandbox loading disabled unless you intentionally want active sandbox snippets.
-
-## Sandbox
-
-The sandbox lives at:
-
-```text
-wp-content/wpgpt-sandbox/
-```
-
-The plugin can create, read, edit, disable, enable, and delete files inside the sandbox. PHP files are restricted to the sandbox for write/edit flows.
-
-When persistent sandbox loading is enabled, active root-level PHP files in the sandbox can be loaded by WordPress. If a fatal error is detected, WPGPT creates `.crashed` and stops loading sandbox PHP files until safe mode is cleared.
+- Updating the plugin keeps the existing token.
+- Saving abilities keeps the existing token.
+- Regenerate the token only when you want to invalidate the previous ChatGPT connection.
 
 ## Security notes
 
-This plugin can expose highly privileged operations. Treat the MCP token like an administrator credential.
-
-Recommended production settings:
-
-- Enable **Safe mode: block changes** unless actively working.
-- Expose only the abilities needed for the current task.
-- Keep `wpgpt/danger-execute-php` disabled by default.
-- Keep deletion disabled by default.
-- Use a dedicated MCP user.
-- Review logs and backups after dangerous actions.
-- Add `define( 'DISALLOW_FILE_EDIT', true );` to `wp-config.php` where appropriate.
-
-## Development notes
-
-WPGPT provides a native endpoint and does not depend on MCP Adapter for the ChatGPT flow. Some clients may still use other WordPress/MCP tooling alongside WPGPT, but that is optional.
+The sandbox is not a true OS-level isolation boundary. PHP execution runs inside WordPress context. Use it carefully, keep dangerous actions disabled by default, and maintain backups.

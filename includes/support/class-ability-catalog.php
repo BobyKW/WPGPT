@@ -117,6 +117,149 @@ class Ability_Catalog {
         return array_values( array_diff( $declared, $runtime ) );
     }
 
+    public static function compact_discovery_preview(): array {
+        $enabled = array_flip( self::enabled_names() );
+        $items = array();
+
+        foreach ( self::declared() as $name => $ability ) {
+            if ( ! isset( $enabled[ $name ] ) ) {
+                continue;
+            }
+
+            if ( ! self::is_allowed( $ability ) ) {
+                continue;
+            }
+
+            if ( empty( $ability['meta']['mcp']['public'] ) ) {
+                continue;
+            }
+
+            $items[] = array(
+                'name'        => $name,
+                'label'       => (string) ( $ability['label'] ?? $name ),
+                'description' => (string) ( $ability['description'] ?? '' ),
+            );
+        }
+
+        return Compact_Ability_Catalog::build_groups( $items );
+    }
+
+    /**
+     * Admin-only preview of compact discovery split into available and blocked actions.
+     *
+     * Discovery only exposes actions that pass the current security policy. This preview
+     * also shows selected-but-blocked actions so the settings page can explain why a
+     * compact module such as wpgpt/danger is still visible while write/delete actions are not.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    public static function compact_admin_exposure_preview(): array {
+        $enabled = array_flip( self::enabled_names() );
+        $items = array();
+        $status_by_name = array();
+
+        foreach ( self::declared() as $name => $ability ) {
+            if ( ! isset( $enabled[ $name ] ) ) {
+                continue;
+            }
+
+            if ( empty( $ability['meta']['mcp']['public'] ) ) {
+                continue;
+            }
+
+            $permission_allowed = self::is_allowed( $ability );
+            $policy_allowed = Security::is_ability_exposed_by_policy( $name, $ability );
+            $allowed = $permission_allowed && $policy_allowed;
+
+            $status_by_name[ $name ] = array(
+                'allowed' => $allowed,
+                'reason'  => $allowed ? '' : self::blocked_reason( $name, $ability, $permission_allowed, $policy_allowed ),
+            );
+
+            $items[] = array(
+                'name'        => $name,
+                'label'       => (string) ( $ability['label'] ?? $name ),
+                'description' => (string) ( $ability['description'] ?? '' ),
+            );
+        }
+
+        $groups = Compact_Ability_Catalog::build_groups( $items );
+
+        foreach ( $groups as &$group ) {
+            $available_actions = array();
+            $blocked_actions = array();
+            $action_status = array();
+
+            $action_map = isset( $group['action_map'] ) && is_array( $group['action_map'] ) ? $group['action_map'] : array();
+            foreach ( $action_map as $action => $detailed_name ) {
+                $detailed_name = (string) $detailed_name;
+                $status = $status_by_name[ $detailed_name ] ?? array( 'allowed' => true, 'reason' => '' );
+                $entry = array(
+                    'action'           => (string) $action,
+                    'detailed_ability' => $detailed_name,
+                    'allowed'          => (bool) $status['allowed'],
+                    'reason'           => (string) $status['reason'],
+                );
+
+                $action_status[] = $entry;
+                if ( $entry['allowed'] ) {
+                    $available_actions[] = (string) $action;
+                } else {
+                    $blocked_actions[] = $entry;
+                }
+            }
+
+            $group['action_status'] = $action_status;
+            $group['available_actions'] = $available_actions;
+            $group['blocked_actions'] = $blocked_actions;
+            $group['available_count'] = count( $available_actions );
+            $group['blocked_count'] = count( $blocked_actions );
+        }
+        unset( $group );
+
+        return $groups;
+    }
+
+    private static function blocked_reason( string $name, array $ability, bool $permission_allowed, bool $policy_allowed ): string {
+        if ( ! $permission_allowed ) {
+            return __( 'Bloqueada por la comprobación de permisos actual.', 'wpgpt-mcp-bridge' );
+        }
+
+        if ( ! $policy_allowed ) {
+            if ( Security::get_read_only() ) {
+                return __( 'Bloqueada por “Modo seguro: bloquear cambios”.', 'wpgpt-mcp-bridge' );
+            }
+
+            $permission_method = self::permission_method_name( $ability );
+            if ( 'can_read_files' === $permission_method && ! Security::get_fs_read() ) {
+                return __( 'Requiere “Leer archivos”.', 'wpgpt-mcp-bridge' );
+            }
+            if ( 'can_write_files' === $permission_method && ! Security::get_fs_write() ) {
+                return __( 'Requiere “Escribir o editar archivos”.', 'wpgpt-mcp-bridge' );
+            }
+            if ( 'can_delete_files' === $permission_method ) {
+                if ( ! Security::get_fs_delete() ) {
+                    return __( 'Requiere “Borrar archivos”.', 'wpgpt-mcp-bridge' );
+                }
+                if ( ! Security::get_allow_delete() ) {
+                    return __( 'Requiere “Permitir eliminaciones”.', 'wpgpt-mcp-bridge' );
+                }
+            }
+
+            return __( 'Bloqueada por los permisos globales actuales.', 'wpgpt-mcp-bridge' );
+        }
+
+        return '';
+    }
+
+    private static function permission_method_name( array $ability ): string {
+        if ( ! isset( $ability['permission_callback'] ) || ! is_array( $ability['permission_callback'] ) ) {
+            return '';
+        }
+
+        return isset( $ability['permission_callback'][1] ) && is_string( $ability['permission_callback'][1] ) ? $ability['permission_callback'][1] : '';
+    }
+
     public static function grouped_for_admin(): array {
         $groups   = array();
         $enabled  = array_flip( self::enabled_names() );
@@ -178,6 +321,16 @@ class Ability_Catalog {
     private static function infer_admin_group( string $name, array $ability ): array {
         $slug = preg_replace( '#^[^/]+/#', '', $name );
         $slug = is_string( $slug ) ? $slug : $name;
+
+        $compact_mapping = Compact_Ability_Catalog::mapping_for_detailed_name( $name );
+        if ( is_array( $compact_mapping ) && ! empty( $compact_mapping['group'] ) ) {
+            $compact_group = (string) $compact_mapping['group'];
+            return array(
+                'key'         => $compact_group,
+                'label'       => Compact_Ability_Catalog::group_label( $compact_group ),
+                'description' => Compact_Ability_Catalog::group_description( $compact_group ),
+            );
+        }
 
         $map = array(
             'danger-'             => array( 'key' => 'danger', 'label' => __( 'Danger', 'wpgpt-mcp-bridge' ), 'description' => __( 'Filesystem, sandbox y ejecución PHP. Estas abilities pueden reemplazar muchas operaciones avanzadas y deben activarse con cuidado.', 'wpgpt-mcp-bridge' ) ),

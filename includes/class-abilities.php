@@ -14,6 +14,7 @@ require_once __DIR__ . '/class-security.php';
 
 require_once __DIR__ . '/support/class-provider-registry.php';
 require_once __DIR__ . '/support/class-ability-catalog.php';
+require_once __DIR__ . '/support/class-compact-ability-catalog.php';
 
 require_once __DIR__ . '/database/class-database-catalog.php';
 require_once __DIR__ . '/database/class-safe-query-builder.php';

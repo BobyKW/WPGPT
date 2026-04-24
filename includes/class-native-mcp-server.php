@@ -3,6 +3,8 @@
 namespace WPGPT\MCPBridge;
 
 use WP_Error;
+use WPGPT\MCPBridge\Support\Ability_Catalog;
+use WPGPT\MCPBridge\Support\Compact_Ability_Catalog;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -220,31 +222,95 @@ class Native_MCP_Server {
     }
 
     private static function discover_abilities(): array {
-        $abilities = self::get_public_abilities();
+        $groups = self::get_compact_public_groups();
         $list = array();
-        foreach ( $abilities as $ability ) {
-            $list[] = array( 'name' => $ability->get_name(), 'label' => $ability->get_label(), 'description' => $ability->get_description() );
+
+        foreach ( $groups as $group ) {
+            $list[] = array(
+                'name'        => $group['name'],
+                'label'       => $group['label'],
+                'description' => $group['description'],
+            );
         }
-        usort( $list, static function ( $a, $b ) { return strcmp( $a['name'], $b['name'] ); } );
+
         return $list;
     }
 
     private static function get_ability_info( string $ability_name ) {
         $ability = self::get_public_ability( $ability_name );
-        if ( ! $ability ) { return new WP_Error( 'wpgpt_ability_not_found', sprintf( 'Ability not found or not exposed: %s', $ability_name ) ); }
-        $info = array( 'name' => $ability->get_name(), 'label' => $ability->get_label(), 'description' => $ability->get_description(), 'input_schema' => self::normalize_schema_for_json( $ability->get_input_schema() ) );
-        $output_schema = $ability->get_output_schema();
-        if ( ! empty( $output_schema ) ) { $info['output_schema'] = self::normalize_schema_for_json( $output_schema ); }
-        $meta = $ability->get_meta();
-        if ( ! empty( $meta ) ) { $info['meta'] = $meta; }
-        return $info;
+        if ( $ability ) {
+            $info = array( 'name' => $ability->get_name(), 'label' => $ability->get_label(), 'description' => $ability->get_description(), 'input_schema' => self::normalize_schema_for_json( $ability->get_input_schema() ) );
+            $output_schema = $ability->get_output_schema();
+            if ( ! empty( $output_schema ) ) { $info['output_schema'] = self::normalize_schema_for_json( $output_schema ); }
+            $meta = $ability->get_meta();
+            if ( ! empty( $meta ) ) { $info['meta'] = $meta; }
+            return $info;
+        }
+
+        $compact = self::get_compact_public_group( $ability_name );
+        if ( is_array( $compact ) ) {
+            $actions = array();
+            foreach ( $compact['actions'] as $action ) {
+                $actions[] = array(
+                    'action'           => $action,
+                    'description'      => Compact_Ability_Catalog::action_description( (string) $action ),
+                    'detailed_ability' => $compact['action_map'][ $action ] ?? null,
+                );
+            }
+
+            return array(
+                'name'          => $compact['name'],
+                'label'         => $compact['label'],
+                'description'   => $compact['description'],
+                'input_schema'  => self::normalize_schema_for_json( Compact_Ability_Catalog::input_schema_for_group( $compact ) ),
+                'output_schema' => self::normalize_schema_for_json( Compact_Ability_Catalog::output_schema_for_group() ),
+                'meta'          => array(
+                    'mcp'                  => array( 'public' => true ),
+                    'compact'              => true,
+                    'actions'              => $actions,
+                    'action_map'           => $compact['action_map'],
+                    'underlying_abilities' => $compact['underlying_abilities'],
+                    'security_note'        => __( 'Esta es una ability compacta. Cada acción interna vuelve a validar allowlist, permisos globales, modo seguro y permisos del usuario WordPress antes de ejecutarse.', 'wpgpt-mcp-bridge' ),
+                ),
+            );
+        }
+
+        return new WP_Error( 'wpgpt_ability_not_found', sprintf( 'Ability not found or not exposed: %s', $ability_name ) );
     }
 
     private static function execute_ability( string $ability_name, array $parameters ) {
         $ability = self::get_public_ability( $ability_name );
-        if ( ! $ability ) { return new WP_Error( 'wpgpt_ability_not_found', sprintf( 'Ability not found or not exposed: %s', $ability_name ) ); }
+        if ( $ability ) {
+            return self::execute_public_ability_object( $ability, $parameters );
+        }
+
+        $compact = self::get_compact_public_group( $ability_name );
+        if ( is_array( $compact ) ) {
+            $action = isset( $parameters['action'] ) ? sanitize_key( (string) $parameters['action'] ) : '';
+            if ( '' === $action ) {
+                return new WP_Error( 'wpgpt_compact_action_required', __( 'El parámetro action es obligatorio para una ability compacta.', 'wpgpt-mcp-bridge' ) );
+            }
+
+            if ( ! isset( $compact['action_map'][ $action ] ) ) {
+                return new WP_Error( 'wpgpt_compact_action_not_allowed', sprintf( 'Action not available for %1$s: %2$s', $ability_name, $action ) );
+            }
+
+            $target_name = (string) $compact['action_map'][ $action ];
+            $target = self::get_public_ability( $target_name );
+            if ( ! $target ) {
+                return new WP_Error( 'wpgpt_compact_target_not_public', sprintf( 'Detailed ability not available or not exposed: %s', $target_name ) );
+            }
+
+            $inner_parameters = isset( $parameters['parameters'] ) && is_array( $parameters['parameters'] ) ? $parameters['parameters'] : array();
+            return self::execute_public_ability_object( $target, $inner_parameters );
+        }
+
+        return new WP_Error( 'wpgpt_ability_not_found', sprintf( 'Ability not found or not exposed: %s', $ability_name ) );
+    }
+
+    private static function execute_public_ability_object( $ability, array $parameters ) {
         try {
-            if ( class_exists( '\WP\MCP\Domain\Utils\AbilityArgumentNormalizer' ) ) {
+            if ( class_exists( '\\WP\\MCP\\Domain\\Utils\\AbilityArgumentNormalizer' ) ) {
                 $parameters = \WP\MCP\Domain\Utils\AbilityArgumentNormalizer::normalize( $ability, $parameters );
             }
             $result = $ability->execute( $parameters );
@@ -252,6 +318,24 @@ class Native_MCP_Server {
         } catch ( \Throwable $e ) {
             return new WP_Error( 'wpgpt_ability_exception', $e->getMessage() );
         }
+    }
+
+    private static function get_compact_public_groups(): array {
+        $summary = array();
+        foreach ( self::get_public_abilities() as $ability ) {
+            $summary[] = array(
+                'name'        => $ability->get_name(),
+                'label'       => $ability->get_label(),
+                'description' => $ability->get_description(),
+            );
+        }
+
+        return Compact_Ability_Catalog::build_groups( $summary );
+    }
+
+    private static function get_compact_public_group( string $compact_name ): ?array {
+        $groups = self::get_compact_public_groups();
+        return $groups[ $compact_name ] ?? null;
     }
 
     private static function get_public_ability( string $ability_name ) {
@@ -274,6 +358,15 @@ class Native_MCP_Server {
         $name = (string) $ability->get_name();
         if ( 0 !== strpos( $name, 'wpgpt/' ) ) { return false; }
         if ( ! Security::is_ability_enabled( $name ) ) { return false; }
+
+        // Apply global exposure policy during discovery and execution, not only in the admin UI.
+        // This keeps compact abilities honest: disabled write/delete permissions remove those
+        // detailed actions from the compact action_map before a client can call them.
+        $declared_ability = Ability_Catalog::find( $name );
+        if ( ! Security::is_ability_exposed_by_policy( $name, is_array( $declared_ability ) ? $declared_ability : array() ) ) {
+            return false;
+        }
+
         $meta = method_exists( $ability, 'get_meta' ) ? $ability->get_meta() : array();
         return isset( $meta['mcp']['public'] ) ? (bool) $meta['mcp']['public'] : true;
     }

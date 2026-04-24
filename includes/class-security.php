@@ -159,7 +159,7 @@ class Security {
             return false;
         }
 
-        if ( 'can_delete_files' === $permission_method && ( self::get_read_only() || ! self::get_fs_delete() ) ) {
+        if ( 'can_delete_files' === $permission_method && ( self::get_read_only() || ! self::get_fs_delete() || ! self::get_allow_delete() ) ) {
             return false;
         }
 

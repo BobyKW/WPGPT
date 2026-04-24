@@ -166,6 +166,8 @@ class Admin {
         );
 
         $ability_groups   = Ability_Catalog::grouped_for_admin();
+        $compact_preview  = Ability_Catalog::compact_discovery_preview();
+        $compact_status_preview = Ability_Catalog::compact_admin_exposure_preview();
         $all_abilities    = Ability_Catalog::declared_names();
         $enabled_abilities = array_flip( Security::get_allowed_abilities( $all_abilities ) );
 
@@ -227,6 +229,28 @@ class Admin {
                 .wpgpt-check-item code { font-size:12px; }
                 .wpgpt-check-item label { display:flex; gap:10px; align-items:flex-start; }
                 .wpgpt-check-item input[type="checkbox"] { margin-top:2px; }
+                .wpgpt-compact-panel { margin:12px 0 18px; border:1px solid #dcdcde; border-radius:10px; background:#fff; overflow:hidden; }
+                .wpgpt-compact-panel > summary { list-style:none; cursor:pointer; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+                .wpgpt-compact-panel > summary::-webkit-details-marker { display:none; }
+                .wpgpt-compact-panel-title { display:flex; flex-direction:column; gap:3px; }
+                .wpgpt-compact-panel-title strong { color:#1d2327; }
+                .wpgpt-compact-panel-title span { color:#646970; font-size:12px; }
+                .wpgpt-compact-panel-chevron { color:#646970; transition:transform .15s ease; }
+                .wpgpt-compact-panel[open] .wpgpt-compact-panel-chevron { transform:rotate(180deg); }
+                .wpgpt-compact-panel-body { border-top:1px solid #dcdcde; padding:14px 16px 16px; background:#fbfbfc; }
+                .wpgpt-compact-preview { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:10px; margin:0; }
+                .wpgpt-compact-item { border:1px solid #dcdcde; border-radius:8px; background:#f6f7f7; padding:10px 12px; }
+                .wpgpt-compact-item strong { display:block; margin-bottom:4px; }
+                .wpgpt-compact-item code { font-size:12px; }
+                .wpgpt-compact-actions { margin-top:6px; color:#646970; font-size:12px; }
+                .wpgpt-compact-item.is-blocked { opacity:.75; }
+                .wpgpt-compact-actions.is-available { color:#1d7f3f; }
+                .wpgpt-compact-actions.is-blocked { color:#8a2424; }
+                .wpgpt-action-label { display:inline-flex; align-items:center; border-radius:999px; padding:1px 7px; margin-right:6px; font-size:11px; font-weight:600; }
+                .wpgpt-action-label-ok { color:#0a4b2a; background:#e7f7ed; border:1px solid #b8e6c8; }
+                .wpgpt-action-label-blocked { color:#7a1d1d; background:#fdecec; border:1px solid #f3b8b8; }
+                .wpgpt-blocked-action-list { margin:6px 0 0 0; padding-left:18px; }
+                .wpgpt-blocked-action-list li { margin:2px 0; }
                 .wpgpt-permission-option { display:block; background:#fff; border:1px solid #dcdcde; border-radius:8px; padding:12px 14px; min-height:72px; }
                 .wpgpt-permission-option strong { display:block; color:#1d2327; margin-bottom:4px; }
                 .wpgpt-permission-option small { display:block; color:#646970; line-height:1.4; margin-left:24px; }
@@ -258,7 +282,7 @@ class Admin {
             <div class="wpgpt-grid">
                 <div class="wpgpt-card"><div class="wpgpt-card-body"><div class="wpgpt-stat-label"><?php echo esc_html__( 'Usuario MCP', 'wpgpt-mcp-bridge' ); ?></div><div class="wpgpt-stat-value"><?php echo esc_html( $selected_user_label ); ?></div></div></div>
                 <div class="wpgpt-card"><div class="wpgpt-card-body"><div class="wpgpt-stat-label"><?php echo esc_html__( 'Token ChatGPT', 'wpgpt-mcp-bridge' ); ?></div><div class="wpgpt-stat-value"><?php echo esc_html( $token_status_label ); ?></div></div></div>
-                <div class="wpgpt-card"><div class="wpgpt-card-body"><div class="wpgpt-stat-label"><?php echo esc_html__( 'Abilities expuestas', 'wpgpt-mcp-bridge' ); ?></div><div class="wpgpt-stat-value"><?php echo esc_html( sprintf( '%d / %d', count( $enabled_abilities ), count( $all_abilities ) ) ); ?></div></div></div>
+                <div class="wpgpt-card"><div class="wpgpt-card-body"><div class="wpgpt-stat-label"><?php echo esc_html__( 'Discovery compacto', 'wpgpt-mcp-bridge' ); ?></div><div class="wpgpt-stat-value"><?php echo esc_html( sprintf( '%1$d visibles · %2$d detalladas seleccionadas', count( $compact_preview ), count( $enabled_abilities ) ) ); ?></div></div></div>
                 <div class="wpgpt-card"><div class="wpgpt-card-body"><div class="wpgpt-stat-label"><?php echo esc_html__( 'Tablas permitidas', 'wpgpt-mcp-bridge' ); ?></div><div class="wpgpt-stat-value"><?php echo esc_html( sprintf( '%d / %d', count( $enabled_tables ), count( $supported_tables ) ) ); ?></div></div></div>
             </div>
 
@@ -338,7 +362,7 @@ class Admin {
 
                 <div class="wpgpt-card">
                     <div class="wpgpt-card-header">
-                        <div><h3><?php echo esc_html__( 'VS Code y otros editores', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Este modo usa una Application Password nativa de WordPress para clientes MCP o editores que admiten autenticación básica.', 'wpgpt-mcp-bridge' ); ?></p></div>
+                        <div><h3><?php echo esc_html__( 'VS Code y otros editores', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Este modo usa MCP Adapter con el cliente remoto de Automattic y una Application Password nativa de WordPress.', 'wpgpt-mcp-bridge' ); ?></p></div>
                             <?php submit_button( __( 'Generar Application Password', 'wpgpt-mcp-bridge' ), 'secondary', 'submit', false, $selected_user_id ? array( 'form' => 'wpgpt-generate-app-password-form' ) : array( 'form' => 'wpgpt-generate-app-password-form', 'disabled' => 'disabled' ) ); ?>
                     </div>
                     <div class="wpgpt-card-body">
@@ -367,8 +391,54 @@ class Admin {
 
                 <h2 class="wpgpt-section-title"><?php echo esc_html__( '3. Habilidades permitidas', 'wpgpt-mcp-bridge' ); ?></h2>
                     <div class="wpgpt-card">
-                        <div class="wpgpt-card-header"><div><h3><?php echo esc_html__( 'Lista de habilidades', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Desmarca habilidades para que dejen de registrarse y no aparezcan en la conexión MCP.', 'wpgpt-mcp-bridge' ); ?></p></div></div>
+                        <div class="wpgpt-card-header"><div><h3><?php echo esc_html__( 'Habilidades permitidas', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'ChatGPT verá abilities agrupadas por módulo para reducir discovery y evitar exceso de peticiones. Las casillas detalladas de abajo siguen siendo la allowlist real de seguridad.', 'wpgpt-mcp-bridge' ); ?></p></div></div>
                         <div class="wpgpt-card-body">
+                            <div class="wpgpt-readonly-note">
+                                <?php echo esc_html__( 'Modo compacto activo: ChatGPT ve una ability por módulo, pero la allowlist detallada de abajo sigue siendo la fuente real de seguridad. Los nombres de los módulos coinciden con las categorías para evitar confusión.', 'wpgpt-mcp-bridge' ); ?>
+                            </div>
+                            <?php if ( ! empty( $compact_status_preview ) ) : ?>
+                                <details class="wpgpt-compact-panel">
+                                    <summary>
+                                        <span class="wpgpt-compact-panel-title">
+                                            <strong><?php echo esc_html__( 'Vista previa de lo que verá ChatGPT', 'wpgpt-mcp-bridge' ); ?></strong>
+                                            <span><?php echo esc_html( sprintf( __( '%1$d módulos compactos visibles. Ábrelo solo cuando quieras revisar acciones disponibles y bloqueadas.', 'wpgpt-mcp-bridge' ), count( $compact_status_preview ) ) ); ?></span>
+                                        </span>
+                                        <span class="wpgpt-compact-panel-chevron">▼</span>
+                                    </summary>
+                                    <div class="wpgpt-compact-panel-body">
+                                        <div class="wpgpt-compact-preview">
+                                            <?php foreach ( $compact_status_preview as $compact ) : ?>
+                                                <div class="wpgpt-compact-item <?php echo empty( $compact['available_actions'] ) ? 'is-blocked' : ''; ?>">
+                                                    <strong><?php echo esc_html( (string) $compact['label'] ); ?></strong>
+                                                    <code><?php echo esc_html( (string) $compact['name'] ); ?></code>
+
+                                                    <?php if ( ! empty( $compact['available_actions'] ) ) : ?>
+                                                        <div class="wpgpt-compact-actions is-available">
+                                                            <span class="wpgpt-action-label wpgpt-action-label-ok"><?php echo esc_html__( 'Disponibles', 'wpgpt-mcp-bridge' ); ?></span>
+                                                            <?php echo esc_html( implode( ', ', array_map( 'strval', $compact['available_actions'] ) ) ); ?>
+                                                        </div>
+                                                    <?php else : ?>
+                                                        <div class="wpgpt-compact-actions is-blocked">
+                                                            <span class="wpgpt-action-label wpgpt-action-label-blocked"><?php echo esc_html__( 'No ejecutable con permisos actuales', 'wpgpt-mcp-bridge' ); ?></span>
+                                                        </div>
+                                                    <?php endif; ?>
+
+                                                    <?php if ( ! empty( $compact['blocked_actions'] ) ) : ?>
+                                                        <div class="wpgpt-compact-actions is-blocked">
+                                                            <span class="wpgpt-action-label wpgpt-action-label-blocked"><?php echo esc_html__( 'Bloqueadas por permisos', 'wpgpt-mcp-bridge' ); ?></span>
+                                                            <ul class="wpgpt-blocked-action-list">
+                                                                <?php foreach ( $compact['blocked_actions'] as $blocked ) : ?>
+                                                                    <li><code><?php echo esc_html( (string) $blocked['action'] ); ?></code> — <?php echo esc_html( (string) $blocked['reason'] ); ?></li>
+                                                                <?php endforeach; ?>
+                                                            </ul>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                </details>
+                            <?php endif; ?>
                             <div class="wpgpt-actions-row">
                                 <button type="button" class="button button-secondary" data-check-group="abilities" data-check-state="all"><?php echo esc_html__( 'Marcar todas', 'wpgpt-mcp-bridge' ); ?></button>
                                 <button type="button" class="button button-secondary" data-check-group="abilities" data-check-state="none"><?php echo esc_html__( 'Desmarcar todas', 'wpgpt-mcp-bridge' ); ?></button>
@@ -458,7 +528,7 @@ class Admin {
             <h2 class="wpgpt-section-title"><?php echo esc_html__( '5. Referencias rápidas', 'wpgpt-mcp-bridge' ); ?></h2>
             <div class="wpgpt-grid-2">
                 <div class="wpgpt-card"><div class="wpgpt-card-body"><h3><?php echo esc_html__( 'Endpoints útiles', 'wpgpt-mcp-bridge' ); ?></h3><table class="widefat striped" style="margin-top:14px;"><tbody><tr><th style="width:230px;"><?php echo esc_html__( 'REST API', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $rest_index_endpoint ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $rest_index_endpoint ); ?></a></td></tr><tr><th><?php echo esc_html__( 'Abilities REST', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $abilities_endpoint ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $abilities_endpoint ); ?></a></td></tr><tr><th><?php echo esc_html__( 'Endpoint MCP propio bridge', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $base_endpoint ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $base_endpoint ); ?></a></td></tr><tr><th><?php echo esc_html__( 'Servidor MCP propio', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $adapter_server_url ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $adapter_server_url ); ?></a></td></tr></tbody></table></div></div>
-                <div class="wpgpt-card"><div class="wpgpt-card-body"><h3><?php echo esc_html__( 'Resumen de exposición', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html( sprintf( __( 'Hay %1$d abilities activas de %2$d declaradas, y %3$d tablas permitidas de %4$d soportadas.', 'wpgpt-mcp-bridge' ), count( $enabled_abilities ), count( $all_abilities ), count( $enabled_tables ), count( $supported_tables ) ) ); ?></p><p class="wpgpt-muted"><?php echo esc_html__( 'Los cambios aplican a lo que el plugin registra y permite en runtime. Si desmarcas algo aquí, deja de exponerse a nuevos clientes MCP.', 'wpgpt-mcp-bridge' ); ?></p></div></div>
+                <div class="wpgpt-card"><div class="wpgpt-card-body"><h3><?php echo esc_html__( 'Resumen de exposición', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html( sprintf( __( 'ChatGPT verá %5$d abilities compactas. Hay %1$d abilities detalladas activas de %2$d declaradas, y %3$d tablas permitidas de %4$d soportadas.', 'wpgpt-mcp-bridge' ), count( $enabled_abilities ), count( $all_abilities ), count( $enabled_tables ), count( $supported_tables ), count( $compact_preview ) ) ); ?></p><p class="wpgpt-muted"><?php echo esc_html__( 'Los cambios aplican a la allowlist detallada. Discovery agrupa automáticamente las abilities habilitadas para reducir peticiones, pero no salta permisos ni modo seguro.', 'wpgpt-mcp-bridge' ); ?></p></div></div>
             </div>
         </div>
         <script>

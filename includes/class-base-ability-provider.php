@@ -171,9 +171,9 @@ abstract class Base_Ability_Provider implements Ability_Provider {
 
 
     /**
-     * Normalize ability schemas for MCP clients.
+     * Normalize ability schemas for MCP Adapter 0.5.0+.
      *
-     * Some MCP clients use typed protocol DTOs and validate tool schemas more
+     * MCP Adapter 0.5.0 uses typed protocol DTOs and validates tool schemas more
      * strictly. In PHP, an empty array may be encoded as [] even when JSON Schema
      * expects an object such as properties: {}. This method keeps existing ability
      * definitions compatible by normalizing empty schema nodes before registration.
