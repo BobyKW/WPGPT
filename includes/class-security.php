@@ -301,6 +301,32 @@ class Security {
         return $user_id;
     }
 
+
+    public static function check_mcp_transport_permission( $request = null ): bool {
+        if ( is_user_logged_in() && current_user_can( 'read' ) ) {
+            return true;
+        }
+
+        $token = self::extract_token_from_request();
+        if ( '' === $token ) {
+            return false;
+        }
+
+        $hash = get_option( self::OPTION_TOKEN_HASH, '' );
+        if ( ! is_string( $hash ) || '' === $hash || ! wp_check_password( $token, $hash ) ) {
+            return false;
+        }
+
+        $configured_user_id = self::get_user_id();
+        if ( $configured_user_id <= 0 ) {
+            return false;
+        }
+
+        wp_set_current_user( $configured_user_id );
+
+        return current_user_can( 'read' );
+    }
+
     private static function extract_token_from_request(): string {
         if ( isset( $_GET['wpgpt_token'] ) ) {
             return sanitize_text_field( wp_unslash( (string) $_GET['wpgpt_token'] ) );

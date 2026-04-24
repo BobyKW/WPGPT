@@ -1,7 +1,8 @@
 {
   "name": "openai/wpgpt-mcp-bridge",
   "type": "wordpress-plugin",
-  "description": "WPGPT MCP Bridge for WordPress",
+  "description": "Standalone MCP bridge for WordPress with controlled abilities and secure sandbox tools.",
+  "version": "1.2.0",
   "license": "GPL-2.0-or-later",
   "autoload": {
     "psr-4": {

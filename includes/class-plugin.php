@@ -8,7 +8,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once __DIR__ . '/class-abilities.php';
 require_once __DIR__ . '/class-admin.php';
+require_once __DIR__ . '/class-sandbox-admin.php';
+require_once __DIR__ . '/class-sandbox-loader.php';
 require_once __DIR__ . '/class-security.php';
+require_once __DIR__ . '/class-native-mcp-server.php';
 require_once __DIR__ . '/class-updater.php';
 
 class Plugin {
@@ -38,6 +41,18 @@ class Plugin {
         if ( false === get_option( 'wpgpt_mcp_bridge_fs_delete' ) ) {
             update_option( 'wpgpt_mcp_bridge_fs_delete', '0', false );
         }
+        if ( false === get_option( Sandbox_Loader::OPTION_ENABLED ) ) {
+            update_option( Sandbox_Loader::OPTION_ENABLED, '0', false );
+        }
+
+        if ( class_exists( Sandbox_Admin::class ) ) {
+            Sandbox_Admin::ensure_root();
+        } else {
+            $sandbox = trailingslashit( WP_CONTENT_DIR ) . 'wpgpt-sandbox';
+            if ( ! is_dir( $sandbox ) ) {
+                wp_mkdir_p( $sandbox );
+            }
+        }
     }
 
     public static function deactivate(): void {}
@@ -50,8 +65,11 @@ class Plugin {
         load_plugin_textdomain( 'wpgpt-mcp-bridge', false, dirname( plugin_basename( WPGPT_MCP_BRIDGE_FILE ) ) . '/languages' );
 
         Security::init();
+        Sandbox_Loader::init();
         Admin::init();
+        Sandbox_Admin::init();
         Abilities::init();
+        Native_MCP_Server::init();
         Updater::init();
 
         \WPGPT\MCPBridge\Structure\Post_Type_Manager::init();
@@ -74,7 +92,7 @@ class Plugin {
         }
 
         $adapter   = \WP\MCP\Core\McpAdapter::instance();
-        $abilities = Abilities::get_all_registered_names();
+        $abilities = Security::get_allowed_abilities( Abilities::get_all_registered_names() );
 
         $adapter->create_server(
             'wpgpt-mcp-server',
@@ -90,7 +108,8 @@ class Plugin {
             \WP\MCP\Infrastructure\Observability\NullMcpObservabilityHandler::class,
             $abilities,
             array(),
-            array()
+            array(),
+            array( Security::class, 'check_mcp_transport_permission' )
         );
     }
 }

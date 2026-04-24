@@ -46,7 +46,9 @@ class Ability_Catalog {
      * Log the number of declared abilities for debugging purposes.
      */
     private static function log_declared_abilities( array $abilities ): void {
-        error_log( sprintf( 'WPGPT MCP Bridge: %d abilities declared.', count( $abilities ) ) );
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( sprintf( 'WPGPT MCP Bridge: %d abilities declared.', count( $abilities ) ) );
+        }
     }
 
     public static function declared_names(): array {
@@ -150,6 +152,13 @@ class Ability_Catalog {
         uasort(
             $groups,
             static function ( array $a, array $b ): int {
+                if ( 'danger' === $a['key'] && 'danger' !== $b['key'] ) {
+                    return -1;
+                }
+                if ( 'danger' !== $a['key'] && 'danger' === $b['key'] ) {
+                    return 1;
+                }
+
                 return strcmp( $a['label'], $b['label'] );
             }
         );
@@ -171,6 +180,7 @@ class Ability_Catalog {
         $slug = is_string( $slug ) ? $slug : $name;
 
         $map = array(
+            'danger-'             => array( 'key' => 'danger', 'label' => __( 'Danger', 'wpgpt-mcp-bridge' ), 'description' => __( 'Filesystem, sandbox y ejecución PHP. Estas abilities pueden reemplazar muchas operaciones avanzadas y deben activarse con cuidado.', 'wpgpt-mcp-bridge' ) ),
             'acf-'                 => array( 'key' => 'acf', 'label' => __( 'ACF', 'wpgpt-mcp-bridge' ), 'description' => __( 'Campos y grupos de Advanced Custom Fields.', 'wpgpt-mcp-bridge' ) ),
             'block-'               => array( 'key' => 'block_editor', 'label' => __( 'Block Editor', 'wpgpt-mcp-bridge' ), 'description' => __( 'Plantillas, partes, bloques reutilizables y navegación moderna.', 'wpgpt-mcp-bridge' ) ),
             'blog-'                => array( 'key' => 'content', 'label' => __( 'Content', 'wpgpt-mcp-bridge' ), 'description' => __( 'Contenido editorial y publicación.', 'wpgpt-mcp-bridge' ) ),
@@ -226,8 +236,18 @@ class Ability_Catalog {
             }
         }
 
+        $category = (string) ( $ability['category'] ?? 'other' );
+
+        if ( 'peligro' === $category || 'danger' === $category ) {
+            return array(
+                'key'         => 'danger',
+                'label'       => __( 'Danger', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Filesystem, sandbox y ejecución PHP. Estas abilities pueden reemplazar muchas operaciones avanzadas y deben activarse con cuidado.', 'wpgpt-mcp-bridge' ),
+            );
+        }
+
         return array(
-            'key'         => (string) ( $ability['category'] ?? 'other' ),
+            'key'         => $category,
             'label'       => __( 'Other', 'wpgpt-mcp-bridge' ),
             'description' => __( 'Abilities agrupadas sin categoría específica.', 'wpgpt-mcp-bridge' ),
         );

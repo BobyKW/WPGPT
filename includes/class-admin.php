@@ -19,12 +19,32 @@ class Admin {
     }
 
     public static function register_menu(): void {
-        add_management_page(
+        add_menu_page(
             __( 'WPGPT MCP Bridge', 'wpgpt-mcp-bridge' ),
-            __( 'WPGPT MCP Bridge', 'wpgpt-mcp-bridge' ),
+            __( 'WPGPT MCP', 'wpgpt-mcp-bridge' ),
+            'manage_options',
+            'wpgpt-mcp-bridge',
+            array( __CLASS__, 'render_settings_page' ),
+            'dashicons-networking',
+            58
+        );
+
+        add_submenu_page(
+            'wpgpt-mcp-bridge',
+            __( 'Configuración', 'wpgpt-mcp-bridge' ),
+            __( 'Configuración', 'wpgpt-mcp-bridge' ),
             'manage_options',
             'wpgpt-mcp-bridge',
             array( __CLASS__, 'render_settings_page' )
+        );
+
+        add_submenu_page(
+            'wpgpt-mcp-bridge',
+            __( 'Sandbox', 'wpgpt-mcp-bridge' ),
+            __( 'Sandbox', 'wpgpt-mcp-bridge' ),
+            'manage_options',
+            'wpgpt-mcp-sandbox',
+            array( '\WPGPT\MCPBridge\Sandbox_Admin', 'render_page' )
         );
     }
 
@@ -40,7 +60,7 @@ class Admin {
         if ( 'generate_token' === $action ) {
             $token = Security::generate_token();
             set_transient( self::TRANSIENT_PLAIN_TOKEN, $token, 10 * MINUTE_IN_SECONDS );
-            wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'generated' => '1' ), admin_url( 'tools.php' ) ) );
+            wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'generated' => '1' ), admin_url( 'admin.php' ) ) );
             exit;
         }
 
@@ -50,7 +70,7 @@ class Admin {
 
             if ( is_wp_error( $result ) ) {
                 set_transient( 'wpgpt_mcp_bridge_admin_error', $result->get_error_message(), 2 * MINUTE_IN_SECONDS );
-                wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'app_password_error' => '1' ), admin_url( 'tools.php' ) ) );
+                wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'app_password_error' => '1' ), admin_url( 'admin.php' ) ) );
                 exit;
             }
 
@@ -65,7 +85,7 @@ class Admin {
                 10 * MINUTE_IN_SECONDS
             );
 
-            wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'app_password_generated' => '1' ), admin_url( 'tools.php' ) ) );
+            wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'app_password_generated' => '1' ), admin_url( 'admin.php' ) ) );
             exit;
         }
 
@@ -96,13 +116,13 @@ class Admin {
 
             if ( empty( $allowed_abilities ) ) {
                 set_transient( 'wpgpt_mcp_bridge_admin_error', __( 'Debes dejar al menos una ability activa.', 'wpgpt-mcp-bridge' ), 2 * MINUTE_IN_SECONDS );
-                wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'settings_error' => '1' ), admin_url( 'tools.php' ) ) );
+                wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'settings_error' => '1' ), admin_url( 'admin.php' ) ) );
                 exit;
             }
 
             if ( empty( $allowed_tables ) ) {
                 set_transient( 'wpgpt_mcp_bridge_admin_error', __( 'Debes dejar al menos una tabla de base de datos permitida.', 'wpgpt-mcp-bridge' ), 2 * MINUTE_IN_SECONDS );
-                wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'settings_error' => '1' ), admin_url( 'tools.php' ) ) );
+                wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'settings_error' => '1' ), admin_url( 'admin.php' ) ) );
                 exit;
             }
 
@@ -115,7 +135,7 @@ class Admin {
             Security::update_allowed_abilities( $allowed_abilities, $all_abilities );
             Security::update_allowed_tables( $allowed_tables, $all_tables );
 
-            wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'updated' => '1' ), admin_url( 'tools.php' ) ) );
+            wp_safe_redirect( add_query_arg( array( 'page' => 'wpgpt-mcp-bridge', 'updated' => '1' ), admin_url( 'admin.php' ) ) );
             exit;
         }
     }
@@ -125,13 +145,13 @@ class Admin {
             return;
         }
 
-        $base_endpoint       = rest_url( 'wpgpt-mcp/mcp' );
-        $adapter_server_url  = rest_url( 'mcp/mcp-adapter-default-server' );
+        $base_endpoint       = rest_url( 'wpgpt-mcp/v1/http' );
+        $adapter_server_url  = $base_endpoint;
         $plain_token         = get_transient( self::TRANSIENT_PLAIN_TOKEN );
         $app_password_data   = get_transient( self::TRANSIENT_APP_PASSWORD_DATA );
         $admin_error         = get_transient( 'wpgpt_mcp_bridge_admin_error' );
         $has_token           = Security::has_token();
-        $full_endpoint       = $has_token && is_string( $plain_token ) && '' !== $plain_token ? add_query_arg( 'wpgpt_token', rawurlencode( $plain_token ), $adapter_server_url ) : $adapter_server_url;
+        $full_endpoint       = $has_token && is_string( $plain_token ) && '' !== $plain_token ? rest_url( 'wpgpt-mcp/v1/' . rawurlencode( $plain_token ) ) : $adapter_server_url;
         $abilities_endpoint  = rest_url( 'wp-abilities/v1/abilities' );
         $rest_index_endpoint = rest_url();
         $selected_user_id    = Security::get_user_id();
@@ -152,6 +172,9 @@ class Admin {
         $db_catalog       = new Database_Catalog();
         $supported_tables = $db_catalog->supported_tables();
         $enabled_tables   = array_flip( Security::get_allowed_tables( array_keys( $supported_tables ) ) );
+
+        $is_read_only = Security::get_read_only();
+        $can_change_files = ! $is_read_only;
 
         $server_name         = self::build_server_name();
         $vscode_json         = self::build_vscode_json( $adapter_server_url, $app_password_data, $selected_username, $server_name );
@@ -204,6 +227,12 @@ class Admin {
                 .wpgpt-check-item code { font-size:12px; }
                 .wpgpt-check-item label { display:flex; gap:10px; align-items:flex-start; }
                 .wpgpt-check-item input[type="checkbox"] { margin-top:2px; }
+                .wpgpt-permission-option { display:block; background:#fff; border:1px solid #dcdcde; border-radius:8px; padding:12px 14px; min-height:72px; }
+                .wpgpt-permission-option strong { display:block; color:#1d2327; margin-bottom:4px; }
+                .wpgpt-permission-option small { display:block; color:#646970; line-height:1.4; margin-left:24px; }
+                .wpgpt-permission-option.is-disabled { opacity:.55; background:#f6f7f7; cursor:not-allowed; }
+                .wpgpt-permission-option.is-disabled input { cursor:not-allowed; }
+                .wpgpt-readonly-note { margin-top:12px; padding:10px 12px; border-left:4px solid #72aee6; background:#f0f6fc; color:#1d2327; }
                 .wpgpt-check-copy { display:block; color:#646970; margin-top:4px; }
                 .wpgpt-actions-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
                 @media (max-width: 782px) { .wpgpt-card-header { flex-direction:column; } }
@@ -255,20 +284,90 @@ class Admin {
                             </select>
                         </div>
 
-                        <div class="wpgpt-field-grid">
-                            <p><label><input type="checkbox" id="wpgpt_read_only" name="wpgpt_read_only" value="1" <?php checked( Security::get_read_only() ); ?> /> <?php echo esc_html__( 'Modo solo lectura', 'wpgpt-mcp-bridge' ); ?></label></p>
-                            <p><label><input type="checkbox" id="wpgpt_allow_delete" name="wpgpt_allow_delete" value="1" <?php checked( Security::get_allow_delete() ); ?> /> <?php echo esc_html__( 'Permitir eliminaciones', 'wpgpt-mcp-bridge' ); ?></label></p>
-                            <p><label><input type="checkbox" id="wpgpt_fs_read" name="wpgpt_fs_read" value="1" <?php checked( Security::get_fs_read() ); ?> /> <?php echo esc_html__( 'Filesystem read', 'wpgpt-mcp-bridge' ); ?></label></p>
-                            <p><label><input type="checkbox" id="wpgpt_fs_write" name="wpgpt_fs_write" value="1" <?php checked( Security::get_fs_write() ); ?> /> <?php echo esc_html__( 'Filesystem write', 'wpgpt-mcp-bridge' ); ?></label></p>
-                            <p><label><input type="checkbox" id="wpgpt_fs_delete" name="wpgpt_fs_delete" value="1" <?php checked( Security::get_fs_delete() ); ?> /> <?php echo esc_html__( 'Filesystem delete', 'wpgpt-mcp-bridge' ); ?></label></p>
+                        <div class="wpgpt-field-grid" id="wpgpt-permission-grid">
+                            <label class="wpgpt-permission-option" for="wpgpt_read_only">
+                                <input type="checkbox" id="wpgpt_read_only" name="wpgpt_read_only" value="1" <?php checked( $is_read_only ); ?> />
+                                <strong><?php echo esc_html__( 'Modo seguro: bloquear cambios', 'wpgpt-mcp-bridge' ); ?></strong>
+                                <small><?php echo esc_html__( 'Bloquea cualquier escritura, borrado o ejecución peligrosa aunque otras opciones estén activadas.', 'wpgpt-mcp-bridge' ); ?></small>
+                            </label>
+                            <label class="wpgpt-permission-option <?php echo $is_read_only ? 'is-disabled' : ''; ?>" for="wpgpt_allow_delete" data-readonly-locked="1">
+                                <input type="checkbox" id="wpgpt_allow_delete" name="wpgpt_allow_delete" value="1" <?php checked( $can_change_files && Security::get_allow_delete() ); ?> <?php disabled( $is_read_only ); ?> />
+                                <strong><?php echo esc_html__( 'Permitir eliminaciones', 'wpgpt-mcp-bridge' ); ?></strong>
+                                <small><?php echo esc_html__( 'Autoriza operaciones de borrado. Mantén esto desactivado salvo mantenimiento puntual.', 'wpgpt-mcp-bridge' ); ?></small>
+                            </label>
+                            <label class="wpgpt-permission-option" for="wpgpt_fs_read">
+                                <input type="checkbox" id="wpgpt_fs_read" name="wpgpt_fs_read" value="1" <?php checked( Security::get_fs_read() ); ?> />
+                                <strong><?php echo esc_html__( 'Leer archivos', 'wpgpt-mcp-bridge' ); ?></strong>
+                                <small><?php echo esc_html__( 'Permite listar y leer archivos según las abilities activas. No permite modificarlos.', 'wpgpt-mcp-bridge' ); ?></small>
+                            </label>
+                            <label class="wpgpt-permission-option <?php echo $is_read_only ? 'is-disabled' : ''; ?>" for="wpgpt_fs_write" data-readonly-locked="1">
+                                <input type="checkbox" id="wpgpt_fs_write" name="wpgpt_fs_write" value="1" <?php checked( $can_change_files && Security::get_fs_write() ); ?> <?php disabled( $is_read_only ); ?> />
+                                <strong><?php echo esc_html__( 'Escribir o editar archivos', 'wpgpt-mcp-bridge' ); ?></strong>
+                                <small><?php echo esc_html__( 'Necesario para crear, sobrescribir o editar archivos. En modo seguro se desactiva.', 'wpgpt-mcp-bridge' ); ?></small>
+                            </label>
+                            <label class="wpgpt-permission-option <?php echo $is_read_only ? 'is-disabled' : ''; ?>" for="wpgpt_fs_delete" data-readonly-locked="1">
+                                <input type="checkbox" id="wpgpt_fs_delete" name="wpgpt_fs_delete" value="1" <?php checked( $can_change_files && Security::get_fs_delete() ); ?> <?php disabled( $is_read_only ); ?> />
+                                <strong><?php echo esc_html__( 'Borrar archivos', 'wpgpt-mcp-bridge' ); ?></strong>
+                                <small><?php echo esc_html__( 'Permiso específico para borrado en filesystem. Requiere también “Permitir eliminaciones”.', 'wpgpt-mcp-bridge' ); ?></small>
+                            </label>
                         </div>
-                        <p class="description"><?php echo esc_html__( 'Si activas el modo solo lectura, las opciones de escritura y eliminación se desactivan automáticamente.', 'wpgpt-mcp-bridge' ); ?></p>
+                        <div class="wpgpt-readonly-note" id="wpgpt-readonly-note">
+                            <?php echo esc_html__( 'Cuando activas “Modo seguro: bloquear cambios”, las opciones incompatibles se desmarcan, se guardan como desactivadas y no se pueden volver a marcar hasta desactivar este modo.', 'wpgpt-mcp-bridge' ); ?>
+                        </div>
                     </div>
                 </div>
 
-                <div class="wpgpt-grid-2 wpgpt-grid-2-top">
+            <h2 class="wpgpt-section-title"><?php echo esc_html__( '2. Acceso para ChatGPT y clientes MCP', 'wpgpt-mcp-bridge' ); ?></h2>
+            <div class="wpgpt-grid-2">
+                <div class="wpgpt-card">
+                    <div class="wpgpt-card-header">
+                        <div><h3><?php echo esc_html__( 'Token Bearer para ChatGPT', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Para ChatGPT usa autenticación “Sin autenticación” y pega la URL completa con token. El token se valida en este plugin y autentica como el usuario operativo configurado arriba.', 'wpgpt-mcp-bridge' ); ?></p></div>
+                            <?php submit_button( __( 'Generar token MCP', 'wpgpt-mcp-bridge' ), 'secondary', 'submit', false, array( 'form' => 'wpgpt-generate-token-form' ) ); ?>
+                    </div>
+                    <div class="wpgpt-card-body">
+                        <p class="wpgpt-kv"><strong><?php echo esc_html__( 'Endpoint MCP propio', 'wpgpt-mcp-bridge' ); ?></strong><code><?php echo esc_html( $adapter_server_url ); ?></code></p>
+                        <p class="wpgpt-kv"><strong><?php echo esc_html__( 'URL completa con token', 'wpgpt-mcp-bridge' ); ?></strong>
+                            <?php if ( $has_token && is_string( $plain_token ) && '' !== $plain_token ) : ?>
+                                <code><?php echo esc_html( $full_endpoint ); ?></code><br><span class="wpgpt-muted"><?php echo esc_html__( 'Guárdala ahora. El token en texto plano solo se muestra durante 10 minutos tras generarlo.', 'wpgpt-mcp-bridge' ); ?></span>
+                            <?php else : ?>
+                                <span class="wpgpt-muted"><?php echo esc_html__( 'Genera un token para ver la URL completa.', 'wpgpt-mcp-bridge' ); ?></span>
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="wpgpt-card">
+                    <div class="wpgpt-card-header">
+                        <div><h3><?php echo esc_html__( 'VS Code y otros editores', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Este modo usa una Application Password nativa de WordPress para clientes MCP o editores que admiten autenticación básica.', 'wpgpt-mcp-bridge' ); ?></p></div>
+                            <?php submit_button( __( 'Generar Application Password', 'wpgpt-mcp-bridge' ), 'secondary', 'submit', false, $selected_user_id ? array( 'form' => 'wpgpt-generate-app-password-form' ) : array( 'form' => 'wpgpt-generate-app-password-form', 'disabled' => 'disabled' ) ); ?>
+                    </div>
+                    <div class="wpgpt-card-body">
+                        <div class="wpgpt-code-shell">
+                            <div class="wpgpt-code-shell-top">
+                                <button type="button" class="button button-small" data-copy-target="wpgpt-vscode-json" style="position:absolute; top:12px; right:12px;"><?php echo esc_html__( 'Copy', 'wpgpt-mcp-bridge' ); ?></button>
+                                <pre id="wpgpt-vscode-json"><?php echo esc_html( $vscode_json ); ?></pre>
+                            </div>
+                            <div class="wpgpt-code-shell-bottom">
+                                <p style="margin:0 0 10px;"><?php echo esc_html__( 'Add to mcp.json.', 'wpgpt-mcp-bridge' ); ?></p>
+                                <p style="margin:0 0 8px;"><strong><?php echo esc_html__( 'Workspace:', 'wpgpt-mcp-bridge' ); ?></strong> <code>.vscode/mcp.json</code></p>
+                                <p style="margin:0;"><strong><?php echo esc_html__( 'User:', 'wpgpt-mcp-bridge' ); ?></strong> <code><?php echo esc_html__( 'Run: MCP: Open User Configuration (command palette)', 'wpgpt-mcp-bridge' ); ?></code></p>
+                            </div>
+                        </div>
+                        <?php if ( $app_password_ready ) : ?>
+                            <div style="margin-top:16px;">
+                                <p class="wpgpt-kv"><strong><?php echo esc_html__( 'Usuario para VS Code', 'wpgpt-mcp-bridge' ); ?></strong><code><?php echo esc_html( (string) $app_password_data['username'] ); ?></code></p>
+                                <p class="wpgpt-kv"><strong><?php echo esc_html__( 'Application Password', 'wpgpt-mcp-bridge' ); ?></strong><code><?php echo esc_html( (string) $app_password_data['password'] ); ?></code><br><span class="wpgpt-muted"><?php echo esc_html__( 'Guárdala ahora. La contraseña en texto plano solo se muestra durante 10 minutos tras generarla.', 'wpgpt-mcp-bridge' ); ?></span></p>
+                            </div>
+                        <?php else : ?>
+                            <p style="margin-top:16px;" class="wpgpt-muted"><?php echo $selected_user_id ? esc_html__( 'Genera una Application Password para ver el bloque completo con credenciales listas para pegar.', 'wpgpt-mcp-bridge' ) : esc_html__( 'Selecciona primero un usuario MCP y guarda los ajustes.', 'wpgpt-mcp-bridge' ); ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+                <h2 class="wpgpt-section-title"><?php echo esc_html__( '3. Habilidades permitidas', 'wpgpt-mcp-bridge' ); ?></h2>
                     <div class="wpgpt-card">
-                        <div class="wpgpt-card-header"><div><h3><?php echo esc_html__( 'Abilities permitidas', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Desmarca abilities para que dejen de registrarse y no aparezcan en la conexión MCP.', 'wpgpt-mcp-bridge' ); ?></p></div></div>
+                        <div class="wpgpt-card-header"><div><h3><?php echo esc_html__( 'Lista de habilidades', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Desmarca habilidades para que dejen de registrarse y no aparezcan en la conexión MCP.', 'wpgpt-mcp-bridge' ); ?></p></div></div>
                         <div class="wpgpt-card-body">
                             <div class="wpgpt-actions-row">
                                 <button type="button" class="button button-secondary" data-check-group="abilities" data-check-state="all"><?php echo esc_html__( 'Marcar todas', 'wpgpt-mcp-bridge' ); ?></button>
@@ -287,7 +386,7 @@ class Admin {
                                                     <span><?php echo esc_html( $group['description'] ); ?></span>
                                                 </div>
                                                 <div class="wpgpt-accordion-meta">
-                                                    <span class="wpgpt-pill"><?php echo esc_html( sprintf( _n( '%d ability', '%d abilities', (int) $group['total_count'], 'wpgpt-mcp-bridge' ), (int) $group['total_count'] ) ); ?></span>
+                                                    <span class="wpgpt-pill"><?php echo esc_html( sprintf( _n( '%d habilidad', '%d habilidades', (int) $group['total_count'], 'wpgpt-mcp-bridge' ), (int) $group['total_count'] ) ); ?></span>
                                                     <span class="wpgpt-pill"><?php echo esc_html( sprintf( __( '%1$d activas', 'wpgpt-mcp-bridge' ), (int) $group['enabled_count'] ) ); ?></span>
                                                     <span class="wpgpt-accordion-chevron">▼</span>
                                                 </div>
@@ -317,6 +416,8 @@ class Admin {
                         </div>
                     </div>
 
+
+                <h2 class="wpgpt-section-title"><?php echo esc_html__( '4. Base de datos', 'wpgpt-mcp-bridge' ); ?></h2>
                     <div class="wpgpt-card">
                         <div class="wpgpt-card-header"><div><h3><?php echo esc_html__( 'Tablas permitidas para database tools', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Estas tablas son las únicas que podrán usar las abilities de base de datos seguras.', 'wpgpt-mcp-bridge' ); ?></p></div></div>
                         <div class="wpgpt-card-body">
@@ -338,77 +439,71 @@ class Admin {
                             </div>
                         </div>
                     </div>
-                </div>
 
                 <p style="margin-top:16px;"><?php submit_button( __( 'Guardar ajustes', 'wpgpt-mcp-bridge' ), 'primary', 'submit', false ); ?></p>
             </form>
 
-            <h2 class="wpgpt-section-title"><?php echo esc_html__( '2. Acceso para ChatGPT y clientes MCP', 'wpgpt-mcp-bridge' ); ?></h2>
-            <div class="wpgpt-grid-2">
-                <div class="wpgpt-card">
-                    <div class="wpgpt-card-header">
-                        <div><h3><?php echo esc_html__( 'Token Bearer para ChatGPT', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Este modo usa el token MCP propio del plugin y autentica como el usuario operativo configurado arriba.', 'wpgpt-mcp-bridge' ); ?></p></div>
-                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:0;">
-                            <?php wp_nonce_field( 'wpgpt_mcp_bridge_action' ); ?>
-                            <input type="hidden" name="action" value="wpgpt_mcp_bridge_action" />
-                            <input type="hidden" name="wpgpt_mcp_bridge_action" value="generate_token" />
-                            <?php submit_button( __( 'Generar token MCP', 'wpgpt-mcp-bridge' ), 'secondary', 'submit', false ); ?>
-                        </form>
-                    </div>
-                    <div class="wpgpt-card-body">
-                        <p class="wpgpt-kv"><strong><?php echo esc_html__( 'Endpoint MCP', 'wpgpt-mcp-bridge' ); ?></strong><code><?php echo esc_html( $adapter_server_url ); ?></code></p>
-                        <p class="wpgpt-kv"><strong><?php echo esc_html__( 'URL completa con token', 'wpgpt-mcp-bridge' ); ?></strong>
-                            <?php if ( $has_token && is_string( $plain_token ) && '' !== $plain_token ) : ?>
-                                <code><?php echo esc_html( $full_endpoint ); ?></code><br><span class="wpgpt-muted"><?php echo esc_html__( 'Guárdala ahora. El token en texto plano solo se muestra durante 10 minutos tras generarlo.', 'wpgpt-mcp-bridge' ); ?></span>
-                            <?php else : ?>
-                                <span class="wpgpt-muted"><?php echo esc_html__( 'Genera un token para ver la URL completa.', 'wpgpt-mcp-bridge' ); ?></span>
-                            <?php endif; ?>
-                        </p>
-                    </div>
-                </div>
+            <form id="wpgpt-generate-token-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:none;">
+                <?php wp_nonce_field( 'wpgpt_mcp_bridge_action' ); ?>
+                <input type="hidden" name="action" value="wpgpt_mcp_bridge_action" />
+                <input type="hidden" name="wpgpt_mcp_bridge_action" value="generate_token" />
+            </form>
+            <form id="wpgpt-generate-app-password-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:none;">
+                <?php wp_nonce_field( 'wpgpt_mcp_bridge_action' ); ?>
+                <input type="hidden" name="action" value="wpgpt_mcp_bridge_action" />
+                <input type="hidden" name="wpgpt_mcp_bridge_action" value="generate_app_password" />
+                <input type="hidden" name="wpgpt_mcp_user_id" value="<?php echo esc_attr( (string) $selected_user_id ); ?>" />
+            </form>
 
-                <div class="wpgpt-card">
-                    <div class="wpgpt-card-header">
-                        <div><h3><?php echo esc_html__( 'VS Code y otros editores', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html__( 'Este modo usa MCP Adapter con el cliente remoto de Automattic y una Application Password nativa de WordPress.', 'wpgpt-mcp-bridge' ); ?></p></div>
-                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:0;">
-                            <?php wp_nonce_field( 'wpgpt_mcp_bridge_action' ); ?>
-                            <input type="hidden" name="action" value="wpgpt_mcp_bridge_action" />
-                            <input type="hidden" name="wpgpt_mcp_bridge_action" value="generate_app_password" />
-                            <input type="hidden" name="wpgpt_mcp_user_id" value="<?php echo esc_attr( (string) $selected_user_id ); ?>" />
-                            <?php submit_button( __( 'Generar Application Password', 'wpgpt-mcp-bridge' ), 'secondary', 'submit', false, $selected_user_id ? array() : array( 'disabled' => 'disabled' ) ); ?>
-                        </form>
-                    </div>
-                    <div class="wpgpt-card-body">
-                        <div class="wpgpt-code-shell">
-                            <div class="wpgpt-code-shell-top">
-                                <button type="button" class="button button-small" data-copy-target="wpgpt-vscode-json" style="position:absolute; top:12px; right:12px;"><?php echo esc_html__( 'Copy', 'wpgpt-mcp-bridge' ); ?></button>
-                                <pre id="wpgpt-vscode-json"><?php echo esc_html( $vscode_json ); ?></pre>
-                            </div>
-                            <div class="wpgpt-code-shell-bottom">
-                                <p style="margin:0 0 10px;"><?php echo esc_html__( 'Add to mcp.json.', 'wpgpt-mcp-bridge' ); ?></p>
-                                <p style="margin:0 0 8px;"><strong><?php echo esc_html__( 'Workspace:', 'wpgpt-mcp-bridge' ); ?></strong> <code>.vscode/mcp.json</code></p>
-                                <p style="margin:0;"><strong><?php echo esc_html__( 'User:', 'wpgpt-mcp-bridge' ); ?></strong> <code><?php echo esc_html__( 'Run: MCP: Open User Configuration (command palette)', 'wpgpt-mcp-bridge' ); ?></code></p>
-                            </div>
-                        </div>
-                        <?php if ( $app_password_ready ) : ?>
-                            <div style="margin-top:16px;">
-                                <p class="wpgpt-kv"><strong><?php echo esc_html__( 'Usuario para VS Code', 'wpgpt-mcp-bridge' ); ?></strong><code><?php echo esc_html( (string) $app_password_data['username'] ); ?></code></p>
-                                <p class="wpgpt-kv"><strong><?php echo esc_html__( 'Application Password', 'wpgpt-mcp-bridge' ); ?></strong><code><?php echo esc_html( (string) $app_password_data['password'] ); ?></code><br><span class="wpgpt-muted"><?php echo esc_html__( 'Guárdala ahora. La contraseña en texto plano solo se muestra durante 10 minutos tras generarla.', 'wpgpt-mcp-bridge' ); ?></span></p>
-                            </div>
-                        <?php else : ?>
-                            <p style="margin-top:16px;" class="wpgpt-muted"><?php echo $selected_user_id ? esc_html__( 'Genera una Application Password para ver el bloque completo con credenciales listas para pegar.', 'wpgpt-mcp-bridge' ) : esc_html__( 'Selecciona primero un usuario MCP y guarda los ajustes.', 'wpgpt-mcp-bridge' ); ?></p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-
-            <h2 class="wpgpt-section-title"><?php echo esc_html__( '3. Referencias rápidas', 'wpgpt-mcp-bridge' ); ?></h2>
+            <h2 class="wpgpt-section-title"><?php echo esc_html__( '5. Referencias rápidas', 'wpgpt-mcp-bridge' ); ?></h2>
             <div class="wpgpt-grid-2">
-                <div class="wpgpt-card"><div class="wpgpt-card-body"><h3><?php echo esc_html__( 'Endpoints útiles', 'wpgpt-mcp-bridge' ); ?></h3><table class="widefat striped" style="margin-top:14px;"><tbody><tr><th style="width:230px;"><?php echo esc_html__( 'REST API', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $rest_index_endpoint ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $rest_index_endpoint ); ?></a></td></tr><tr><th><?php echo esc_html__( 'Abilities REST', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $abilities_endpoint ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $abilities_endpoint ); ?></a></td></tr><tr><th><?php echo esc_html__( 'Endpoint MCP bridge', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $base_endpoint ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $base_endpoint ); ?></a></td></tr><tr><th><?php echo esc_html__( 'Servidor MCP Adapter', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $adapter_server_url ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $adapter_server_url ); ?></a></td></tr></tbody></table></div></div>
+                <div class="wpgpt-card"><div class="wpgpt-card-body"><h3><?php echo esc_html__( 'Endpoints útiles', 'wpgpt-mcp-bridge' ); ?></h3><table class="widefat striped" style="margin-top:14px;"><tbody><tr><th style="width:230px;"><?php echo esc_html__( 'REST API', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $rest_index_endpoint ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $rest_index_endpoint ); ?></a></td></tr><tr><th><?php echo esc_html__( 'Abilities REST', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $abilities_endpoint ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $abilities_endpoint ); ?></a></td></tr><tr><th><?php echo esc_html__( 'Endpoint MCP propio bridge', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $base_endpoint ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $base_endpoint ); ?></a></td></tr><tr><th><?php echo esc_html__( 'Servidor MCP propio', 'wpgpt-mcp-bridge' ); ?></th><td><a href="<?php echo esc_url( $adapter_server_url ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $adapter_server_url ); ?></a></td></tr></tbody></table></div></div>
                 <div class="wpgpt-card"><div class="wpgpt-card-body"><h3><?php echo esc_html__( 'Resumen de exposición', 'wpgpt-mcp-bridge' ); ?></h3><p><?php echo esc_html( sprintf( __( 'Hay %1$d abilities activas de %2$d declaradas, y %3$d tablas permitidas de %4$d soportadas.', 'wpgpt-mcp-bridge' ), count( $enabled_abilities ), count( $all_abilities ), count( $enabled_tables ), count( $supported_tables ) ) ); ?></p><p class="wpgpt-muted"><?php echo esc_html__( 'Los cambios aplican a lo que el plugin registra y permite en runtime. Si desmarcas algo aquí, deja de exponerse a nuevos clientes MCP.', 'wpgpt-mcp-bridge' ); ?></p></div></div>
             </div>
         </div>
         <script>
+        (function() {
+            function syncReadOnlyPermissions() {
+                var readOnly = document.getElementById('wpgpt_read_only');
+                if (!readOnly) {
+                    return;
+                }
+
+                var lockedInputs = [
+                    document.getElementById('wpgpt_allow_delete'),
+                    document.getElementById('wpgpt_fs_write'),
+                    document.getElementById('wpgpt_fs_delete')
+                ];
+
+                lockedInputs.forEach(function(input) {
+                    if (!input) {
+                        return;
+                    }
+
+                    var holder = input.closest('[data-readonly-locked]');
+                    if (readOnly.checked) {
+                        input.checked = false;
+                        input.disabled = true;
+                        if (holder) {
+                            holder.classList.add('is-disabled');
+                        }
+                    } else {
+                        input.disabled = false;
+                        if (holder) {
+                            holder.classList.remove('is-disabled');
+                        }
+                    }
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', syncReadOnlyPermissions);
+            document.addEventListener('change', function(event) {
+                if (event.target && event.target.id === 'wpgpt_read_only') {
+                    syncReadOnlyPermissions();
+                }
+            });
+        })();
+
         document.addEventListener('click', function(event) {
             var copyButton = event.target.closest('[data-copy-target]');
             if (copyButton) {
@@ -444,6 +539,9 @@ class Admin {
             var group = batchButton.getAttribute('data-check-group');
             var state = batchButton.getAttribute('data-check-state');
             document.querySelectorAll('[data-check-item="' + group + '"]').forEach(function(input) {
+                if (input.disabled) {
+                    return;
+                }
                 input.checked = state === 'all';
             });
         });

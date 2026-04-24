@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: WPGPT - MCP Extensor & ChatGPT Connection
- * Description: Extends MCP Adapter with secure WordPress tools and a simple connection flow for ChatGPT, VS Code, and other MCP-compatible clients.
- * Version: 1.1.0
+ * Description: Standalone MCP bridge for WordPress with controlled abilities, secure sandbox tools, and connection flows for ChatGPT and MCP-compatible clients.
+ * Version: 1.2.0
  * Author: WPGPT
  * Plugin URI: https://github.com/BobyKW/WPGPT
  * Update URI: https://github.com/BobyKW/WPGPT
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WPGPT_MCP_BRIDGE_VERSION', '1.1.0' );
+define( 'WPGPT_MCP_BRIDGE_VERSION', '1.2.0' );
 define( 'WPGPT_MCP_BRIDGE_FILE', __FILE__ );
 define( 'WPGPT_MCP_BRIDGE_DIR', plugin_dir_path( __FILE__ ) );
 

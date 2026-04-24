@@ -1,81 +1,118 @@
 === WPGPT - MCP Extensor & ChatGPT Connection ===
-Contributors: openai
+Contributors: wpgpt
 Requires at least: 6.6
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Extend MCP Adapter with secure WordPress abilities and easy connection snippets for ChatGPT, VS Code, and other MCP-compatible editors.
+Standalone MCP bridge for WordPress with controlled abilities, secure sandbox tools, and connection flows for ChatGPT and MCP-compatible clients.
 
 == Description ==
 
-WPGPT extends MCP Adapter with a practical admin layer, secure WordPress tools, and guided connection flows for AI clients.
+WPGPT exposes a native MCP endpoint from WordPress and lets site owners decide exactly which WordPress abilities are available to ChatGPT and other MCP-compatible clients.
 
-It is designed for site owners and developers who want to expose controlled WordPress capabilities to ChatGPT, VS Code, Cursor, and similar MCP-compatible tools without building a custom integration from scratch.
+It includes a focused admin interface, token-based ChatGPT connection flow, selectable MCP operating user, permission controls, ability allowlisting, and a secure sandbox for advanced filesystem and PHP-assisted maintenance workflows.
 
 Main features:
 
-* Extends MCP Adapter instead of replacing it.
-* Adds secure MCP abilities for diagnostics, content operations, database inspection, plugin and theme analysis, and repository-oriented tasks.
-* Lets you choose the WordPress user used for MCP actions.
-* Generates a Bearer token flow for ChatGPT connections.
-* Generates a WordPress Application Password flow for VS Code and other editor integrations.
-* Includes admin snippets and copy-ready connection examples.
-* Keeps configuration focused in a single admin screen.
+* Native standalone MCP endpoint for WordPress.
+* MCP Adapter is not required for the ChatGPT connection.
+* Bearer-token connection flow for ChatGPT.
+* WordPress Application Password helper for compatible editors and clients.
+* Selectable MCP operating user.
+* Ability allowlist with grouped categories.
+* Danger category for advanced filesystem and sandbox abilities.
+* Safe mode: block changes.
+* Read, write, edit, and delete filesystem permissions.
+* Explicit deletion confirmation.
+* Secure sandbox at wp-content/wpgpt-sandbox/.
+* Optional persistent sandbox PHP loader.
+* Safe mode with .crashed marker when sandbox loading fails.
+* .disabled support for sandbox PHP files.
+* Backups before dangerous file operations.
+* JSONL audit log for dangerous actions.
+* Dedicated WordPress admin sidebar menu.
 
 == Requirements ==
 
 * WordPress 6.6 or higher
 * PHP 8.1 or higher
-* MCP Adapter installed and active
+* Administrator access
+
+MCP Adapter is optional and is not required for WPGPT's native ChatGPT endpoint.
 
 == Installation ==
 
-1. Install and activate MCP Adapter.
-2. Install and activate WPGPT - MCP Extensor & ChatGPT Connection.
-3. Go to Tools > WPGPT MCP Bridge.
-4. Select the WordPress user that MCP should act as.
-5. Save the settings.
-6. Generate the credential you want to use:
-   * Bearer token for ChatGPT
-   * Application Password for VS Code and similar editors
-7. Copy the generated connection snippet into your MCP client.
+1. Install and activate WPGPT - MCP Extensor & ChatGPT Connection.
+2. Open WPGPT MCP in the WordPress admin sidebar.
+3. Select the WordPress user that MCP should operate as.
+4. Configure permissions.
+5. Choose the abilities that should be exposed.
+6. Generate or reuse the MCP token.
+7. Copy the full MCP endpoint URL into ChatGPT or your MCP client.
 
 == Usage ==
 
 = ChatGPT =
 
-Use the generated Bearer token and the MCP endpoint shown in the plugin admin.
+Use the full tokenized endpoint shown in the plugin settings page.
 
-= VS Code and other editors =
+The endpoint follows this structure:
 
-Use the generated Application Password snippet shown in the plugin admin. The plugin provides a ready-to-copy configuration based on the selected WordPress user.
+/wp-json/wpgpt-mcp/v1/YOUR_TOKEN
 
-== Notes ==
+= Editors and other clients =
 
-* WPGPT depends on MCP Adapter and is intended to work as an extension layer on top of it.
-* ChatGPT and editor connections use different credential flows by design.
-* The selected MCP user determines the WordPress permissions available through the connection.
+For clients that support WordPress credentials, the plugin can generate a WordPress Application Password for the selected user.
+
+= Sandbox =
+
+The sandbox lives at wp-content/wpgpt-sandbox/.
+
+The plugin can manage files inside the sandbox and can optionally load root-level PHP files from the sandbox. If sandbox loading causes a fatal error, WPGPT enters safe mode using a .crashed marker.
+
+== Security ==
+
+The MCP token should be treated like an administrator credential. Keep dangerous abilities disabled unless needed.
+
+Recommended production posture:
+
+* Enable Safe mode: block changes unless actively working.
+* Expose only the abilities needed for the current task.
+* Keep wpgpt/danger-execute-php disabled by default.
+* Keep deletion disabled by default.
+* Use a dedicated MCP user.
+* Review logs and backups after dangerous actions.
 
 == Frequently Asked Questions ==
 
-= Does this plugin work without MCP Adapter? =
+= Does this plugin require MCP Adapter? =
 
-No. WPGPT extends MCP Adapter and requires it to be installed and active.
+No. WPGPT provides its own native MCP endpoint for the ChatGPT connection.
 
-= Can I use the same credential for ChatGPT and VS Code? =
+= Do I need to regenerate the token after updating the plugin? =
 
-No. ChatGPT uses the plugin Bearer token flow, while VS Code and similar editors are intended to use a WordPress Application Password.
+No. Updating the plugin does not require a new token. Regenerate the token only when you intentionally want to invalidate the previous connection.
 
-= Can I change the MCP user later? =
+= Do I need to regenerate the token after changing abilities? =
 
-Yes. You can select a different user in the admin settings, save the change, and generate new credentials if needed.
+No. Save the settings and the next discovery request will use the current allowed abilities.
+
+= Is PHP execution safe? =
+
+PHP execution is powerful and risky. Keep wpgpt/danger-execute-php disabled unless you need it for a controlled task.
 
 == Changelog ==
 
-= 1.1.0 =
-* Major internal refactor and stabilization.
-* Optimized MCP abilities for WordPress.
-* Improved security and permission handling.
+= 1.2.0 =
+* Added native standalone MCP endpoint for ChatGPT connections.
+* Removed MCP Adapter as a requirement for the ChatGPT flow.
+* Added Danger ability category for advanced filesystem and sandbox operations.
+* Added secure sandbox page and filesystem abilities.
+* Added optional persistent sandbox PHP loader with .crashed safe mode.
+* Added backups and JSONL audit logs for dangerous operations.
+* Added improved permission UI with Safe mode: block changes.
+* Reorganized settings page: permissions, access, abilities, database.
+* Added token persistence across plugin updates and ability changes.

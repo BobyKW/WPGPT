@@ -38,7 +38,9 @@ abstract class Base_Ability_Provider implements Ability_Provider {
                 ),
             );
 
-            wp_register_ability( $name, array_merge( $defaults, $ability ) );
+            $ability = $this->normalize_ability_for_mcp_adapter( array_merge( $defaults, $ability ) );
+
+            wp_register_ability( $name, $ability );
         }
     }
 
@@ -165,6 +167,133 @@ abstract class Base_Ability_Provider implements Ability_Provider {
         }
 
         return $this->can_manage_site();
+    }
+
+
+    /**
+     * Normalize ability schemas for MCP clients.
+     *
+     * Some MCP clients use typed protocol DTOs and validate tool schemas more
+     * strictly. In PHP, an empty array may be encoded as [] even when JSON Schema
+     * expects an object such as properties: {}. This method keeps existing ability
+     * definitions compatible by normalizing empty schema nodes before registration.
+     */
+    protected function normalize_ability_for_mcp_adapter( array $ability ): array {
+        if ( isset( $ability['input_schema'] ) && is_array( $ability['input_schema'] ) ) {
+            $ability['input_schema'] = $this->normalize_json_schema( $ability['input_schema'] );
+        }
+
+        if ( isset( $ability['output_schema'] ) && is_array( $ability['output_schema'] ) ) {
+            $ability['output_schema'] = $this->normalize_json_schema( $ability['output_schema'] );
+        }
+
+        return $ability;
+    }
+
+    /**
+     * Normalize a JSON Schema fragment so it serializes as valid JSON Schema.
+     *
+     * @param mixed  $schema  Schema fragment.
+     * @param string $context Current schema context.
+     * @return mixed
+     */
+    protected function normalize_json_schema( $schema, string $context = 'schema' ) {
+        if ( ! is_array( $schema ) ) {
+            return $schema;
+        }
+
+        if ( array() === $schema ) {
+            if ( 'properties' === $context ) {
+                return (object) array();
+            }
+
+            return $this->mixed_json_schema();
+        }
+
+        if ( 'properties' === $context ) {
+            $normalized_properties = array();
+            foreach ( $schema as $property_name => $property_schema ) {
+                $normalized_properties[ $property_name ] = $this->normalize_json_schema( $property_schema, 'property' );
+            }
+
+            return empty( $normalized_properties ) ? (object) array() : $normalized_properties;
+        }
+
+        $normalized = array();
+        foreach ( $schema as $key => $value ) {
+            switch ( $key ) {
+                case 'properties':
+                    $normalized[ $key ] = $this->normalize_json_schema( $value, 'properties' );
+                    break;
+
+                case 'items':
+                    if ( is_array( $value ) && array() === $value ) {
+                        $normalized[ $key ] = $this->mixed_json_schema();
+                    } else {
+                        $normalized[ $key ] = $this->normalize_json_schema( $value, 'schema' );
+                    }
+                    break;
+
+                case 'anyOf':
+                case 'oneOf':
+                case 'allOf':
+                    $items = array();
+                    foreach ( (array) $value as $candidate ) {
+                        $items[] = $this->normalize_json_schema( $candidate, 'schema' );
+                    }
+                    $normalized[ $key ] = $items;
+                    break;
+
+                case 'additionalProperties':
+                    if ( is_bool( $value ) ) {
+                        $normalized[ $key ] = $value;
+                    } elseif ( is_array( $value ) && array() === $value ) {
+                        $normalized[ $key ] = true;
+                    } else {
+                        $normalized[ $key ] = $this->normalize_json_schema( $value, 'schema' );
+                    }
+                    break;
+
+                case 'enum':
+                case 'required':
+                case 'type':
+                case 'description':
+                case 'format':
+                case 'default':
+                case 'minimum':
+                case 'maximum':
+                case 'minLength':
+                case 'maxLength':
+                case 'minItems':
+                case 'maxItems':
+                    $normalized[ $key ] = $value;
+                    break;
+
+                default:
+                    $normalized[ $key ] = is_array( $value ) ? $this->normalize_json_schema( $value, 'schema' ) : $value;
+                    break;
+            }
+        }
+
+        if ( isset( $normalized['properties'] ) && ! isset( $normalized['type'] ) && ! isset( $normalized['anyOf'] ) && ! isset( $normalized['oneOf'] ) && ! isset( $normalized['allOf'] ) ) {
+            $normalized = array_merge( array( 'type' => 'object' ), $normalized );
+        }
+
+        return $normalized;
+    }
+
+    protected function mixed_json_schema(): array {
+        return array(
+            'anyOf' => array(
+                array( 'type' => 'string' ),
+                array( 'type' => 'number' ),
+                array( 'type' => 'integer' ),
+                array( 'type' => 'boolean' ),
+                array( 'type' => 'object', 'additionalProperties' => true ),
+                array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+                array( 'type' => 'null' ),
+            ),
+        );
     }
 
     protected function object_schema(): array {

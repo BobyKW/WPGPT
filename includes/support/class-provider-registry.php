@@ -30,6 +30,7 @@ use WPGPT\MCPBridge\Block_Editor_Provider;
 use WPGPT\MCPBridge\Maintenance_Provider;
 use WPGPT\MCPBridge\Transfer_Provider;
 use WPGPT\MCPBridge\Environment_Provider;
+use WPGPT\MCPBridge\Danger_Provider;
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -66,6 +67,7 @@ class Provider_Registry {
             'maintenance'=> Maintenance_Provider::class,
             'transfer'   => Transfer_Provider::class,
             'environment'=> Environment_Provider::class,
+            'danger'     => Danger_Provider::class,
         );
     }
 }

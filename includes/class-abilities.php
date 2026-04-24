@@ -89,6 +89,7 @@ require_once __DIR__ . '/abilities/class-block-editor-provider.php';
 require_once __DIR__ . '/abilities/class-maintenance-provider.php';
 require_once __DIR__ . '/abilities/class-transfer-provider.php';
 require_once __DIR__ . '/abilities/class-environment-provider.php';
+require_once __DIR__ . '/abilities/class-danger-provider.php';
 
 class Abilities {
     private static array $providers = array();
@@ -128,6 +129,14 @@ class Abilities {
             array(
                 'label'       => __( 'WPGPT Read Only', 'wpgpt-mcp-bridge' ),
                 'description' => __( 'Herramientas de lectura y gestión controlada para contenido, estructura, plugins, repositorio, diagnósticos y base de datos.', 'wpgpt-mcp-bridge' ),
+            )
+        );
+
+        wp_register_ability_category(
+            'peligro',
+            array(
+                'label'       => __( 'Peligro', 'wpgpt-mcp-bridge' ),
+                'description' => __( 'Habilidades avanzadas para filesystem y ejecución PHP. Usar solo en desarrollo o staging.', 'wpgpt-mcp-bridge' ),
             )
         );
     }
